@@ -1,50 +1,125 @@
-# BMU Online (prototip v0.1)
+# BMU Online
 
-Brauzerdə işləyən, Bakı Mühəndislik Universitetinin kampusunda keçən multiplayer oyun.
+A browser-based multiplayer 3D game set on the campus of Baku Engineering University (BMU).
+Players create their own character, explore the campus together, chat, level up and fight —
+and when they log off, their character stays on campus as a wandering NPC.
 
-## İşə salmaq
-`start.bat` faylına iki dəfə kliklə və ya:
+> **Status:** early prototype (v0.1). The campus layout is an approximation and will be refined from photos.
 
-```
+## Quick start
+
+**Requirements:** [Node.js](https://nodejs.org/) 18 or newer.
+
+On Windows, double-click `start.bat`. It installs dependencies on first run, starts the server and opens the game.
+
+Or manually:
+
+```bash
 npm install
 npm start
 ```
 
-Sonra brauzerdə `http://localhost:3000` aç. Eyni Wi-Fi-dakı dostlar `http://<sənin-IP>:3000` ilə qoşula bilər
-(IP-ni `ipconfig` göstərir; Windows Firewall icazə istəyə bilər).
+Then open <http://localhost:3000>. Friends on the same network can join via `http://<your-ip>:3000`
+(find your IP with `ipconfig`; Windows Firewall may ask for permission).
+Set the `PORT` environment variable to use a different port.
 
-## Hazır olanlar
-- Ad + PIN ilə giriş (hesab avtomatik yaradılır), məlumatlar `data/players.json`-da saxlanılır
-- Xarakter yaratma (6 bölmə): 8 hazır obraz, bədən (boy, çəki, əzələ, ayaq, baş), üz (forma, göz, qaş, burun, ağız, dodaq, yanaq, saqqal),
-  13 saç düzümü, 7 üst geyim + naxışlar, 5 alt geyim, 3 ayaqqabı, papaq/eynək/çanta/sırğa/boyun aksesuarları.
-  Önizləmə şəkilləri, geri al/irəli al (Ctrl+Z/Y), bölmə üzrə və tam təsadüfi, pozalar. İstənilən vaxt **C** ilə dəyişmək
-- Kişi və qadın bədəni fərqlidir (çiyin, bel, omba, sinə, çənə, kirpik, dodaq)
-- Emosiyalar: 1 əl yelləmək, 2 rəqs, 3 sevinc (hamı görür, NPC-lər də edir)
-- Döyüş: **G** yumruq/tapança, **klik** vur, **R** doldur (12 güllə). 100 can, 5 san sonra bərpa olunur.
-  Tapança 22 zərər (başa 55), yumruq 12. Ölən 6 san sonra uzaqda doğulur, 3 san qorunur; öldürən +25 XP (NPC üçün +10).
-  Vurulan NPC qaçır. İsabəti server hesablayır (divar arxasından vurmaq olmur). Rəqəmlər `server.js` → `W`
-- Qrafika: qradiyentli səma, buludlar, ACES ton xəritələmə, iti kölgələr, daş yollar, kollar, çiçəklər, fənərlər, ot,
-  fasadlarda çərçivəli pəncərələr, əsas korpusda sütunlu giriş. **P** — foto rejimi; ⚙ Ayarlar → keyfiyyət (Yüksək/Aşağı)
-- Sabit NPC-lər `campus.json` → `npcs` (məs. dar ağacının yanında "Meydandayıq" deyən Rəhman)
-- Hicab (Aksesuar → Baş), "Mühəndis qız" hazır obrazı
-- Dar ağacı (kitabxananın cənub-şərqi): yaxınlaşıb **F** → "Yeni məhkum yarat". Məhkum uydurma NPC-dir —
-  görünüşü redaktorda qurulur, adı `options.json`-dakı `dummyNames` siyahısından seçilir (real oyunçular çəkilmir,
-  sərbəst ad yazılmır). 3 yer, 2 dəqiqə qalır, istənilən oyunçu azad edə bilər
-- Kamera: siçanı basıb sürüşdür və ya klikləyib kilidlə; Q/E; həssaslıq ayarı; kamera binalara girmir
-- Kampus (təxmini düzüm): Əsas korpus, Yeni tədris korpusu, Kitabxana, İdman zalı, Yataqxana, Texnopark, Yeməkxana, futbol meydançası, fəvvarəli meydan, dayanacaq
-- Multiplayer: bir-birini görmək, çat (Enter)
-- Oyundan çıxan oyunçunun xarakteri kampusda **NPC kimi gəzməyə davam edir**, geri girəndə oradan davam edirsən
-- Gəzdikcə XP və level
+## Features
 
-## Fayllar
-- `server/server.js` — server, hesablar, NPC süni intellekti
-- `public/data/campus.json` — xəritə (binaların yeri/ölçüsü, yollar) — şəkillərə görə burada dəqiqləşdirilir
-- `public/data/options.json` — xarakter seçimləri
-- `public/js/character.js` — xarakter modeli, `world.js` — kampus, `creator.js` — redaktor, `main.js` — oyun
+### Accounts & persistence
+- Sign in with a name and a 4–8 digit PIN; new accounts are created automatically.
+- PINs are stored as salted `scrypt` hashes in `data/players.json` (excluded from git).
+- Your position, level, XP and character are saved between sessions.
 
-## Növbəti mərhələlər
-1. Döyüş: silah, sağlamlıq, öldürmə, respawn
-2. Binaların içi (dərs otaqları, kitabxana)
-3. Mini-oyunlar (futbol, viktorina, yarış), tapşırıqlar, XP mükafatları
-4. Əsl kampusa uyğun xəritə (şəkillər əsasında)
-5. Sonra: Godot/Unity-yə keçid
+### Character creator
+- Six sections: **Presets**, **Body**, **Face**, **Hair**, **Clothes**, **Accessories**.
+- Clearly distinct male and female body shapes (shoulders, waist, hips, jaw, eyelashes, lips).
+- Body sliders: height, weight, muscle, leg length, head size.
+- Face: face shape, eye shape and colour, brows, nose, mouth, lip colour, cheeks, facial hair.
+- 13 hairstyles, 7 tops with printable patterns, 5 bottoms, 3 shoe types, headwear, glasses, bags, earrings and neck accessories.
+- Live 3D thumbnails for hairstyles, headwear, glasses and presets.
+- Undo / redo (`Ctrl+Z` / `Ctrl+Y`), per-section and full randomizer, preview poses.
+- Re-open the creator in game at any time with **C**.
+
+### Campus & world
+- Approximate BMU campus: Main Building (with a columned entrance), New Teaching Building, Library,
+  Sports Hall, Dormitory, Technopark, Cafeteria, football pitch, central plaza with fountain, parking lot.
+- Stylized graphics: gradient sky with sun glow, drifting clouds, ACES tone mapping, soft shadows,
+  paved paths with curbs, hedges, flower beds, street lamps, grass, detailed building facades.
+- Static NPCs defined in `campus.json` (e.g. Rəhman, who stands by the gallows with a speech bubble).
+
+### Multiplayer
+- Real-time movement sync over WebSockets (10 Hz snapshots with client-side interpolation).
+- Chat, join / leave messages, kill feed.
+- **Offline characters become NPCs** that walk the campus paths, pause, wave and dance —
+  and you resume from wherever your NPC was when you log back in.
+- Emotes: wave, dance, cheer (visible to everyone).
+
+### Combat
+- Two weapons: **fists** and a **pistol** (12-round magazine, manual or automatic reload).
+- Over-the-shoulder aiming camera with crosshair; 100 HP with regeneration after 5 s without damage.
+- Pistol: 22 damage, 55 on headshots, 70 m range. Fist: 12 damage at close range.
+- Death animation, respawn after 6 s away from the attacker, 3 s spawn protection.
+- +25 XP for defeating a player, +10 for an NPC. NPCs that get hit run away.
+- **Server-authoritative:** hits, damage, fire rate, ammo and line of sight are validated on the server.
+- Effects: tracers, muzzle flash, impact sparks, floating damage numbers, hit markers,
+  damage vignette, overhead health bars and synthesized sound effects (no audio files needed).
+- Tuning values live in the `W` object in `server/server.js`.
+
+### Gallows
+- Walk up to the gallows and press **F** to open its panel.
+- Create a fictional "prisoner" NPC in the character creator and pick a name from the preset list
+  (`dummyNames` in `options.json`). Real players cannot be placed on the gallows and free-text names are not allowed.
+- 3 slots, each prisoner stays for 2 minutes; any player can release them.
+
+### Progression
+- Earn XP by walking around and in combat; level-ups are announced to everyone.
+
+## Controls
+
+| Key | Action |
+|---|---|
+| `W` `A` `S` `D` / arrow keys | Move |
+| `Shift` | Sprint |
+| `Space` | Jump |
+| Mouse drag, or click to lock the mouse | Rotate camera |
+| `Q` / `E` | Rotate camera |
+| Mouse wheel | Zoom |
+| `G` | Switch between fists and pistol |
+| Left click | Punch / shoot |
+| `R` | Reload |
+| `1` `2` `3` | Emotes: wave, dance, cheer |
+| `F` | Use the gallows (when nearby) |
+| `C` | Open the character creator |
+| `P` | Photo mode (hides the UI for screenshots) |
+| `Enter` | Chat |
+| `Esc` | Release the mouse / close panels |
+
+The ⚙ **Settings** panel has mouse sensitivity, invert Y, mouse-lock mode and graphics quality (High / Low).
+
+## Project structure
+
+```
+server/server.js          Game server: static files, WebSocket protocol, accounts, NPC AI, combat, gallows
+public/index.html         Page layout and UI
+public/style.css          UI styles
+public/js/main.js         Game client: networking, input, camera, HUD, game loop
+public/js/character.js    Procedural character model, animations, name tags, speech bubbles, pistol model
+public/js/creator.js      Character creator UI and preview stage
+public/js/world.js        Campus: buildings, paths, plaza, football pitch, gallows, collisions
+public/js/decor.js        Sky, clouds, grass, hedges, flowers, street lamps, rocks
+public/js/combat.js       Combat effects, sounds, health bars, aim raycasting
+public/data/campus.json   Map data: buildings, paths / NPC navigation graph, spawn, static NPCs
+public/data/options.json  Character options, colour palettes, presets, prisoner names
+start.bat                 One-click launcher for Windows
+```
+
+Tech stack: [Three.js](https://threejs.org/) on the client (no build step, ES modules),
+Node.js with [`ws`](https://github.com/websockets/ws) on the server.
+
+## Roadmap
+
+1. Accurate campus layout based on photos
+2. Building interiors (classrooms, library, cafeteria)
+3. Mini-games (football, quizzes, races), quests and rewards
+4. More weapons and vehicles
+5. Possible port to a game engine (Godot or Unity)
