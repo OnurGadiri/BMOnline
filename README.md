@@ -4,7 +4,7 @@ A browser-based multiplayer 3D game set on the campus of Baku Engineering Univer
 Players create their own character, explore the campus together, chat, level up and fight —
 and when they log off, their character stays on campus as a wandering NPC.
 
-> **Status:** early prototype (v0.1). The campus layout is an approximation and will be refined from photos.
+> **Status:** early prototype (v0.1). The campus layout follows satellite imagery; building details are stylized.
 
 ## Quick start
 
@@ -41,8 +41,11 @@ Set the `PORT` environment variable to use a different port.
 - Re-open the creator in game at any time with **C**.
 
 ### Campus & world
-- Approximate BMU campus: Main Building (with a columned entrance), New Teaching Building, Library,
-  Sports Hall, Dormitory, Technopark, Cafeteria, football pitch, central plaza with fountain, parking lot.
+- BMU campus rebuilt from satellite imagery and photos (~400 × 720 m, aligned to the campus axis):
+  the brick Rectorate with its pink-and-white wings, the plaza with the "BEU" letters and flags,
+  Prefabrik buildings, Yeni bina, football pitch, Economics building, the south building,
+  the Languages building and tennis courts — plus the entrance avenue, parking lots and the residential
+  towers, construction crane and highway traffic around the campus.
 - Stylized graphics: gradient sky with sun glow, drifting clouds, ACES tone mapping, soft shadows,
   paved paths with curbs, hedges, flower beds, street lamps, grass, detailed building facades.
 - Static NPCs defined in `campus.json` (e.g. Rəhman, who stands by the gallows with a speech bubble).
@@ -118,7 +121,7 @@ Node.js with [`ws`](https://github.com/websockets/ws) on the server.
 
 ## Roadmap
 
-1. Accurate campus layout based on photos
+1. More building details from photos (remaining facades, signage)
 2. Building interiors (classrooms, library, cafeteria)
 3. Mini-games (football, quizzes, races), quests and rewards
 4. More weapons and vehicles

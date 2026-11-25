@@ -1,26 +1,72 @@
 {
-  "_note": "Təxmini düzüm. Koordinatlar metrlə: x şərqə, z cənuba. Şəkillər gəldikdən sonra dəqiqləşdiriləcək.",
-  "bounds": { "minX": -150, "maxX": 150, "minZ": -150, "maxZ": 150 },
-  "spawn": { "x": 0, "z": 45, "ry": 3.14159 },
+  "_note": "BMU kampusu — peyk görüntüsü və fotolar əsasında. Koordinatlar metrlə. Xəritə kampus oxu boyunca (~42°) fırladılıb: +x şimal-şərqə (yaşayış binalarına), +z cənub-şərqə (Dillər korpusuna) doğrudur. Giriş -z tərəfdədir (Həsən Əliyev pr.).",
+  "bounds": { "minX": -300, "maxX": 112, "minZ": -286, "maxZ": 440 },
+  "spawn": { "x": 25, "z": -150, "ry": 1.5708 },
+
   "buildings": [
-    { "id": "main",    "name": "Əsas korpus",           "x": 0,    "z": -50,   "w": 120, "d": 25, "h": 16, "color": "#d8cbb0", "roof": "#8a7f6a", "labelSide": "s" },
-    { "id": "wingE",   "name": "",                      "x": 50,   "z": -23.75,"w": 20,  "d": 27.5,"h": 16, "color": "#d8cbb0", "roof": "#8a7f6a", "labelSide": "" },
-    { "id": "wingW",   "name": "",                      "x": -50,  "z": -23.75,"w": 20,  "d": 27.5,"h": 16, "color": "#d8cbb0", "roof": "#8a7f6a", "labelSide": "" },
-    { "id": "newBld",  "name": "Yeni tədris korpusu",   "x": 92,   "z": 30,    "w": 30,  "d": 50, "h": 20, "color": "#b9c7d4", "roof": "#56636e", "labelSide": "w" },
-    { "id": "library", "name": "Kitabxana",             "x": -87,  "z": 30,    "w": 30,  "d": 25, "h": 10, "color": "#c9a27a", "roof": "#6e4f35", "labelSide": "e" },
-    { "id": "gym",     "name": "İdman zalı",            "x": 92,   "z": -60,   "w": 40,  "d": 30, "h": 12, "color": "#9fb8a0", "roof": "#4d6650", "labelSide": "w" },
-    { "id": "dorm",    "name": "Yataqxana",             "x": -95,  "z": -60,   "w": 25,  "d": 45, "h": 18, "color": "#e0b8a0", "roof": "#7a5848", "labelSide": "e" },
-    { "id": "techno",  "name": "Texnopark",             "x": -92,  "z": 95,    "w": 30,  "d": 20, "h": 8,  "color": "#a7b3c9", "roof": "#3f4a5e", "labelSide": "e" },
-    { "id": "cafe",    "name": "Yeməkxana",             "x": 47,   "z": 85,    "w": 25,  "d": 18, "h": 6,  "color": "#f0d58c", "roof": "#8a6d2a", "labelSide": "w" }
+    { "id": "rectorate", "name": "Rektorluq", "x": 73, "z": -140, "w": 26, "d": 24, "h": 17, "style": "brick", "special": "rectorate" },
+    { "id": "wingNW", "name": "", "x": 76, "z": -177, "w": 20, "d": 50, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
+    { "id": "wingSE", "name": "", "x": 76, "z": -103, "w": 20, "d": 50, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
+    { "id": "perpNW", "name": "", "x": 64, "z": -211, "w": 44, "d": 18, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
+    { "id": "perpSE", "name": "", "x": 64, "z": -69, "w": 44, "d": 18, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
+    { "id": "endNW", "name": "", "x": 36, "z": -211, "w": 12, "d": 22, "h": 13.5, "style": "brickglass" },
+    { "id": "endSE", "name": "", "x": 36, "z": -69, "w": 12, "d": 22, "h": 13.5, "style": "brickglass" },
+
+    { "id": "prefab1", "name": "Prefabrik 1", "x": 22, "z": -30, "w": 10, "d": 14, "h": 4, "style": "cream", "color": "#e9e4da", "roof": "#7d8085", "labelSide": "w" },
+    { "id": "prefab", "name": "Prefabrik", "x": 12, "z": 15, "w": 12, "d": 34, "h": 4.5, "style": "cream", "color": "#eeeae2", "roof": "#7d8085", "labelSide": "w" },
+    { "id": "newBld", "name": "Yeni bina", "x": -39, "z": 11, "w": 40, "d": 80, "h": 11, "style": "modern", "color": "#eef0f2", "accent": "#8fa3b5", "roof": "#c9ccd1", "labelSide": "e" },
+
+    { "id": "econN", "name": "", "x": -259, "z": -182, "w": 28, "d": 30, "h": 18, "style": "modern", "color": "#efe3cf", "accent": "#d18a55", "glass": true, "roof": "#6fae7a" },
+    { "id": "econC", "name": "İqtisadiyyat korpusu", "x": -259, "z": -145, "w": 28, "d": 44, "h": 15, "style": "brick", "color": "#6e4535", "roof": "#6fae7a", "labelSide": "e" },
+    { "id": "econS", "name": "", "x": -259, "z": -108, "w": 28, "d": 30, "h": 18, "style": "modern", "color": "#efe3cf", "accent": "#d18a55", "glass": true, "roof": "#6fae7a" },
+
+    { "id": "south", "name": "Cənub korpusu", "x": -36, "z": 270, "w": 26, "d": 80, "h": 12, "style": "modern", "color": "#f0ece4", "accent": "#7fa7a0", "roof": "#7cc39a", "labelSide": "e" },
+    { "id": "lang", "name": "Dillər korpusu", "x": 55, "z": 398, "w": 36, "d": 36, "h": 20, "style": "modern", "color": "#f1ebe3", "accent": "#b9734a", "roof": "#9a9da2", "labelSide": "w", "special": "arches" }
   ],
-  "fountain": { "x": 0, "z": 0, "r": 5 },
-  "field": { "x": 0, "z": -105, "w": 90, "d": 50 },
-  "parking": { "x": 75, "z": 120, "w": 50, "d": 30 },
-  "gate": { "x": 0, "z": 140 },
-  "gallows": { "x": -45, "z": 58, "platformH": 1.4, "slots": 3, "slotGap": 1.9 },
+
+  "areas": [
+    { "type": "meadow", "x": -125, "z": -120, "w": 210, "d": 300 },
+    { "type": "meadow", "x": -100, "z": 260, "w": 320, "d": 360 },
+    { "type": "asphalt", "x": 32.5, "z": -151, "w": 55, "d": 54 },
+    { "type": "garden", "x": 32, "z": -190, "w": 52, "d": 22 },
+    { "type": "garden", "x": 32, "z": -101, "w": 52, "d": 44 },
+    { "type": "parking", "x": -11, "z": -165, "w": 12, "d": 170, "rows": "z" },
+    { "type": "parking", "x": -100, "z": 75, "w": 40, "d": 12, "rows": "x" },
+    { "type": "field", "x": 48, "z": 30, "w": 38, "d": 62 },
+    { "type": "court", "x": -14, "z": 374, "w": 26, "d": 20 },
+    { "type": "paving", "x": 14, "z": -6, "w": 26, "d": 10 },
+    { "type": "paving", "x": 2, "z": 398, "w": 50, "d": 14 }
+  ],
+
+  "plazaDecor": {
+    "letters": { "x": 16, "z": -121, "ry": -1.5708, "text": "BEU" },
+    "billboard": { "x": 26, "z": -114, "ry": -1.5708 },
+    "monument": { "x": 33, "z": -121 },
+    "flags": [[55, -157], [55, -160], [55, -163]],
+    "benches": [
+      [10, -124, 3.1416], [22, -124, 3.1416], [40, -124, 3.1416],
+      [10, -178, 0], [24, -178, 0], [44, -178, 0],
+      [28, -100, 1.5708], [28, -88, 1.5708], [40, -195, 1.5708], [24, -195, 1.5708],
+      [-14, 100, 1.5708], [-14, 200, 1.5708], [18, 386, 1.5708]
+    ]
+  },
+
+  "towers": [
+    { "x": 140, "z": -205, "h": 52 }, { "x": 175, "z": -170, "h": 56 }, { "x": 148, "z": -60, "h": 50 },
+    { "x": 185, "z": -20, "h": 58 }, { "x": 220, "z": -110, "h": 54 }, { "x": 255, "z": -60, "h": 60 },
+    { "x": 230, "z": 30, "h": 52 }, { "x": 290, "z": -150, "h": 56 }, { "x": 300, "z": 10, "h": 50 },
+    { "x": 160, "z": 70, "h": 48 }, { "x": 210, "z": 120, "h": 54 }, { "x": 280, "z": 110, "h": 58 },
+    { "x": 140, "z": -130, "h": 40, "style": "concrete" }, { "x": 200, "z": -230, "h": 44, "style": "concrete" }
+  ],
+  "crane": { "x": 152, "z": -118, "h": 66 },
+  "houses": { "minX": -420, "maxX": 330, "minZ": 300, "maxZ": 520, "count": 70, "avoid": { "minX": -300, "maxX": 112, "minZ": -286, "maxZ": 440 } },
+  "highway": { "z": -305, "minX": -500, "maxX": 450, "w": 18 },
+  "gate": { "x": 0, "z": -286 },
+
+  "gallows": { "x": -92, "z": -140, "platformH": 1.4, "slots": 3, "slotGap": 1.9 },
   "npcs": [
     {
-      "name": "Rəhman", "x": -39.6, "z": 59.2, "ry": 0.25, "say": "Meydandayıq",
+      "name": "Rəhman", "x": -86.6, "z": -138.8, "ry": 0.25, "say": "Meydandayıq",
       "appearance": {
         "body": "m", "hair": "short", "hairColor": "#141010", "beard": "stubble", "brows": "thick",
         "top": "jacket", "topColor": "#22313f", "topColor2": "#ffffff", "pattern": "plain",
@@ -28,37 +74,29 @@
       }
     }
   ],
+
   "nodes": {
-    "gate": [0, 135],
-    "r1":   [0, 85],
-    "r2":   [0, 35],
-    "ps":   [0, 22],
-    "pe":   [22, 0],
-    "pw":   [-22, 0],
-    "pn":   [0, -25],
-    "e1":   [70, 0],
-    "e2":   [72, 30],
-    "e3":   [68, -35],
-    "e4":   [66, -62],
-    "e5":   [66, -85],
-    "f1":   [40, -100],
-    "w1":   [-68, 0],
-    "w2":   [-66, 30],
-    "w3":   [-68, -35],
-    "w4":   [-77, -60],
-    "w5":   [-68, -85],
-    "f2":   [-40, -100],
-    "cafe": [30, 85],
-    "tech": [-72, 92],
-    "park": [45, 118],
-    "gal":  [-38, 64]
+    "gate": [0, -272],
+    "a1": [0, -215], "a2": [0, -160], "a3": [0, -105], "j1": [0, -50],
+    "L1": [-6, -36], "L2": [-72, -36], "L3": [-72, 58], "L4": [-6, 58],
+    "s1": [-6, 150], "s2": [-6, 250], "s3": [-6, 292],
+    "n0": [96, -230], "n1": [96, -50], "n2": [96, 30], "n3": [96, 150], "n4": [96, 292],
+    "d1": [96, 330], "d2": [28, 370], "d3": [28, 420], "ct": [-14, 358],
+    "w1": [-212, -255], "w2": [-212, -140], "w3": [-212, -90],
+    "m1": [-80, -150], "gal": [-84, -130],
+    "p1": [30, -150], "door": [56, -140], "g1": [30, -190], "g2": [30, -100],
+    "pf": [2, 15], "f1": [75, 30], "pk": [-100, 66]
   },
   "edges": [
-    ["gate", "r1"], ["r1", "r2"], ["r2", "ps"],
-    ["ps", "pe"], ["pe", "pn"], ["pn", "pw"], ["pw", "ps"],
-    ["pe", "e1"], ["e1", "e2"], ["e1", "e3"], ["e3", "e4"], ["e4", "e5"], ["e5", "f1"],
-    ["pw", "w1"], ["w1", "w2"], ["w1", "w3"], ["w3", "w4"], ["w3", "w5"], ["w5", "f2"],
-    ["f1", "f2"],
-    ["r1", "cafe"], ["r1", "tech"], ["gate", "park"], ["r2", "gal"]
+    ["gate", "a1", "road"], ["a1", "a2", "road"], ["a2", "a3", "road"], ["a3", "j1", "road"],
+    ["j1", "L1", "road"], ["L1", "L2", "road"], ["L2", "L3", "road"], ["L3", "L4", "road"], ["L4", "L1", "road"],
+    ["j1", "n1", "road"], ["gate", "n0", "road"], ["n0", "n1", "road"], ["n1", "n2", "road"], ["n2", "n3", "road"], ["n3", "n4", "road"],
+    ["L4", "s1", "road"], ["s1", "s2", "road"], ["s2", "s3", "road"], ["s3", "n4", "road"],
+    ["n4", "d1", "road"], ["d1", "d2", "road"],
+    ["gate", "w1", "road"], ["w1", "w2", "road"], ["w2", "w3", "road"],
+    ["a2", "m1", "path"], ["m1", "w2", "path"], ["m1", "gal", "path"],
+    ["a2", "p1", "path"], ["p1", "door", "path"], ["p1", "g1", "path"], ["p1", "g2", "path"],
+    ["j1", "pf", "path"], ["pf", "L4", "path"], ["n2", "f1", "path"],
+    ["d2", "d3", "path"], ["d2", "ct", "path"], ["L2", "pk", "path"]
   ]
 }

@@ -32,8 +32,8 @@ window.__bmu = { creator }; // konsoldan sazlama üçün
 // ---------- Oyun səhnəsi ----------
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#d8ecfb');
-scene.fog = new THREE.Fog('#c3def3', 140, 430);
-const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 900);
+scene.fog = new THREE.Fog('#c3def3', 180, 700);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 1500);
 scene.add(new THREE.HemisphereLight('#d6ebff', '#5f7d45', 1.25));
 const sun = new THREE.DirectionalLight('#fff0d4', 3.0);
 sun.castShadow = true;

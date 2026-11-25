@@ -74,6 +74,12 @@ function segHitsBox(x1, z1, x2, z2, b, pad = 1) {
   }
   return true;
 }
+/** Mövqe xəritənin içindədir və heç bir binanın içində deyil */
+function validPos(x, z) {
+  const b = CAMPUS.bounds;
+  if (!(x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ)) return false;
+  return !CAMPUS.buildings.some((bd) => Math.abs(x - bd.x) < bd.w / 2 + 0.5 && Math.abs(z - bd.z) < bd.d / 2 + 0.5);
+}
 function clearLine(x1, z1, x2, z2) {
   return !CAMPUS.buildings.some((b) => segHitsBox(x1, z1, x2, z2, b));
 }
@@ -153,6 +159,7 @@ function stepAI(e, dt) {
 for (const [key, acc] of Object.entries(db.accounts)) {
   if (!acc.appearance) continue;
   acc.appearance = validAppearance(acc.appearance); // köhnə formatı yenilə
+  if (acc.pos && !validPos(acc.pos.x, acc.pos.z)) acc.pos = null; // xəritə dəyişibsə — girişdən başla
   const e = { key, name: acc.name, appearance: acc.appearance, x: acc.pos?.x ?? CAMPUS.spawn.x, y: 0,
     z: acc.pos?.z ?? CAMPUS.spawn.z, ry: acc.pos?.ry ?? 0, moving: false, online: false, ai: null, hp: 100 };
   startAI(e);

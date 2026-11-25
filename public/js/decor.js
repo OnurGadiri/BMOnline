@@ -34,7 +34,7 @@ export function buildSky(scene) {
         #include <colorspace_fragment>
       }`,
   });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(450, 32, 16), mat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(700, 32, 16), mat);
   sky.renderOrder = -1;
   sky.frustumCulled = false;
   scene.add(sky);
@@ -47,18 +47,18 @@ export function buildClouds(scene, R) {
   const mat = new THREE.MeshLambertMaterial({ color: '#ffffff', emissive: '#c9d9ea', emissiveIntensity: 0.35, flatShading: true, fog: false });
   const geo = new THREE.IcosahedronGeometry(1, 1);
   const clouds = [];
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 24; i++) {
     const c = new THREE.Group();
     const n = 4 + Math.floor(R() * 4);
     for (let j = 0; j < n; j++) {
       const m = new THREE.Mesh(geo, mat);
-      const s = 6 + R() * 7;
+      const s = 7 + R() * 8;
       m.scale.set(s * 1.3, s * 0.75, s);
-      m.position.set((j - n / 2) * 7 + R() * 4, R() * 3, R() * 6 - 3);
+      m.position.set((j - n / 2) * 8 + R() * 4, R() * 3, R() * 6 - 3);
       c.add(m);
     }
-    const ang = R() * Math.PI * 2, rad = 120 + R() * 260;
-    c.position.set(Math.cos(ang) * rad, 75 + R() * 45, Math.sin(ang) * rad);
+    const ang = R() * Math.PI * 2, rad = 150 + R() * 400;
+    c.position.set(Math.cos(ang) * rad, 95 + R() * 60, Math.sin(ang) * rad + 80);
     c.rotation.y = R() * Math.PI;
     c.userData.speed = 1 + R() * 1.5;
     group.add(c);
@@ -68,60 +68,51 @@ export function buildClouds(scene, R) {
   return (dt) => {
     for (const c of clouds) {
       c.position.x += c.userData.speed * dt;
-      if (c.position.x > 420) c.position.x = -420;
+      if (c.position.x > 650) c.position.x = -650;
     }
   };
 }
 
-/** Ot, kollar, çiçəklər, fənərlər, daşlar */
+/**
+ * Kollar, çiçəklər, fənərlər, ot, daşlar.
+ * ctx: { colliders, circles, edges: [{x1,z1,x2,z2,half,road}], blocked(x,z,margin), hardAreas }
+ */
 export function addDecor(scene, campus, ctx, R, quality) {
-  const { colliders, circles } = ctx;
-  const nodes = campus.nodes;
-  const edges = campus.edges.map(([a, b]) => [nodes[a], nodes[b]]);
-  const b = campus.bounds, fd = campus.field, pk = campus.parking, gl = campus.gallows;
-
-  const pathDist = (x, z) => {
-    let best = Infinity;
-    for (const [[x1, z1], [x2, z2]] of edges) {
-      const dx = x2 - x1, dz = z2 - z1;
-      const t = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / (dx * dx + dz * dz)));
-      best = Math.min(best, Math.hypot(x - (x1 + t * dx), z - (z1 + t * dz)));
-    }
-    return best;
-  };
-  const inBox = (x, z, m) => colliders.some((c) => x > c.minX - m && x < c.maxX + m && z > c.minZ - m && z < c.maxZ + m);
-  const inSpecial = (x, z, m = 0) =>
-    Math.hypot(x, z) < 27 + m ||
-    (Math.abs(x - fd.x) < fd.w / 2 + 1 + m && Math.abs(z - fd.z) < fd.d / 2 + 1 + m) ||
-    (Math.abs(x - pk.x) < pk.w / 2 + 1 + m && Math.abs(z - pk.z) < pk.d / 2 + 1 + m) ||
-    (gl && Math.abs(x - gl.x) < 5 + m && Math.abs(z - gl.z) < 5 + m);
-  const inside = (x, z, m) => x > b.minX + m && x < b.maxX - m && z > b.minZ + m && z < b.maxZ - m;
+  const { circles, edges, blocked } = ctx;
+  const b = campus.bounds;
   const dummy = new THREE.Object3D();
   const col = new THREE.Color();
+  const along = (e, d, off) => {
+    const len = Math.hypot(e.x2 - e.x1, e.z2 - e.z1);
+    const ux = (e.x2 - e.x1) / len, uz = (e.z2 - e.z1) / len;
+    return [e.x1 + ux * d - uz * off, e.z1 + uz * d + ux * off];
+  };
 
-  // ---- Fənərlər (yolların kənarında + meydanın ətrafında) ----
+  // ---- Fənərlər (yolların kənarında, səkidə) ----
   const lampSpots = [];
-  for (const [[x1, z1], [x2, z2]] of edges) {
-    const len = Math.hypot(x2 - x1, z2 - z1);
-    const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
+  for (const e of edges) {
+    const len = Math.hypot(e.x2 - e.x1, e.z2 - e.z1);
+    const off = e.road ? 6.2 : 2.3;
+    const step = e.road ? 22 : 16;
     let side = 1;
-    for (let d = 8; d < len - 4; d += 17) {
-      const x = x1 + ux * d - uz * 3.2 * side, z = z1 + uz * d + ux * 3.2 * side;
-      side = -side;
-      if (inBox(x, z, 1) || Math.hypot(x, z) < 29 || !inside(x, z, 2)) continue;
+    for (let d = 8; d < len - 4; d += step) {
+      const [x, z] = along(e, d, off * side);
+      side = e.road ? side : -side;
+      if (ctx.colliders.some((c) => x > c.minX - 1 && x < c.maxX + 1 && z > c.minZ - 1 && z < c.maxZ + 1)) continue;
+      if (lampSpots.some(([lx, lz]) => Math.hypot(lx - x, lz - z) < 8)) continue;
       lampSpots.push([x, z]);
+      if (e.road) {
+        const [x2, z2] = along(e, d + step / 2, -off);
+        if (!lampSpots.some(([lx, lz]) => Math.hypot(lx - x2, lz - z2) < 8)) lampSpots.push([x2, z2]);
+      }
     }
   }
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    lampSpots.push([Math.sin(a) * 24.5, Math.cos(a) * 24.5]);
-  }
-  const poleGeo = new THREE.CylinderGeometry(0.07, 0.11, 4.2, 8);
-  poleGeo.translate(0, 2.1, 0);
+  const poleGeo = new THREE.CylinderGeometry(0.07, 0.11, 4.6, 8);
+  poleGeo.translate(0, 2.3, 0);
   const headGeo = new THREE.CylinderGeometry(0.28, 0.18, 0.45, 8);
-  headGeo.translate(0, 4.35, 0);
+  headGeo.translate(0, 4.75, 0);
   const capGeo = new THREE.ConeGeometry(0.36, 0.25, 8);
-  capGeo.translate(0, 4.68, 0);
+  capGeo.translate(0, 5.08, 0);
   const poles = new THREE.InstancedMesh(poleGeo, new THREE.MeshLambertMaterial({ color: '#2d3640' }), lampSpots.length);
   const heads = new THREE.InstancedMesh(headGeo, new THREE.MeshLambertMaterial({ color: '#fff4cf', emissive: '#ffe39a', emissiveIntensity: 0.6 }), lampSpots.length);
   const caps = new THREE.InstancedMesh(capGeo, new THREE.MeshLambertMaterial({ color: '#2d3640' }), lampSpots.length);
@@ -136,25 +127,32 @@ export function addDecor(scene, campus, ctx, R, quality) {
   poles.castShadow = caps.castShadow = true;
   scene.add(poles, heads, caps);
 
-  // ---- Kollar (yolların kənarı boyunca) ----
+  // ---- Kollar: yolların kənarında və bağlarda (fotolardakı kimi qırxılmış kollar) ----
   const bushSpots = [];
-  for (const [[x1, z1], [x2, z2]] of edges) {
-    const len = Math.hypot(x2 - x1, z2 - z1);
-    const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
-    for (let d = 4; d < len - 3; d += 4.5) {
+  for (const e of edges) {
+    const len = Math.hypot(e.x2 - e.x1, e.z2 - e.z1);
+    const off = e.road ? 7.6 : 3.1;
+    for (let d = 4; d < len - 3; d += e.road ? 3.2 : 4.5) {
       for (const side of [-1, 1]) {
-        if (R() < 0.45) continue;
-        const off = 3.6 + R() * 0.8;
-        const x = x1 + ux * d - uz * off * side, z = z1 + uz * d + ux * off * side;
-        if (inBox(x, z, 1.2) || inSpecial(x, z) || !inside(x, z, 2) || pathDist(x, z) < 3) continue;
-        if (lampSpots.some(([lx, lz]) => Math.hypot(lx - x, lz - z) < 1.6)) continue;
-        bushSpots.push([x, z, 0.55 + R() * 0.55]);
+        if (R() < (e.road ? 0.35 : 0.55)) continue;
+        const [x, z] = along(e, d, (off + R() * 0.6) * side);
+        if (blocked(x, z, 0.6)) continue;
+        bushSpots.push([x, z, 0.5 + R() * 0.45]);
       }
     }
   }
-  const bushGeo = new THREE.IcosahedronGeometry(1, 1);
-  const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), bushSpots.length);
-  const greens = ['#3f7d3a', '#4d8f42', '#5c9e48', '#356f34', '#6aa84f'];
+  for (const a of campus.areas || []) {
+    if (a.type !== 'garden') continue;
+    // bağın kənarı boyunca kol cərgəsi
+    for (let t = 1.5; t < a.w - 1; t += 2.2) {
+      for (const sz of [-1, 1]) {
+        const x = a.x - a.w / 2 + t, z = a.z + sz * (a.d / 2 - 1.2);
+        if (!blocked(x, z, 0.2)) bushSpots.push([x, z, 0.5 + R() * 0.2]);
+      }
+    }
+  }
+  const bushes = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), bushSpots.length);
+  const greens = ['#3f7d3a', '#4d8f42', '#5c9e48', '#356f34', '#6aa84f', '#7a9e3a'];
   bushSpots.forEach(([x, z, s], i) => {
     dummy.position.set(x, s * 0.55, z);
     dummy.scale.set(s * 1.25, s * 0.85, s * 1.1);
@@ -164,31 +162,34 @@ export function addDecor(scene, campus, ctx, R, quality) {
     bushes.setColorAt(i, col.set(greens[Math.floor(R() * greens.length)]));
     circles.push({ x, z, r: s * 1.0 });
   });
-  bushes.castShadow = true;
-  bushes.receiveShadow = true;
+  bushes.castShadow = bushes.receiveShadow = true;
   scene.add(bushes);
 
-  // ---- Çiçəklər: meydanın ətrafında və binaların önündə ----
+  // ---- Çiçəklər: bağlarda və binaların önündə ----
   const flowerSpots = [];
-  for (let i = 0; i < 520; i++) {
-    const a = R() * Math.PI * 2, r = 26.2 + R() * 1.6;
-    flowerSpots.push([Math.sin(a) * r, Math.cos(a) * r]);
-  }
-  for (const bd of campus.buildings) {
-    if (!bd.labelSide) continue;
-    const side = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] }[bd.labelSide];
-    const along = side[0] ? bd.d : bd.w;
-    for (let i = 0; i < 160; i++) {
-      const t = (R() - 0.5) * (along - 2);
-      if (Math.abs(t) < 4) continue; // giriş qapısının önü boş qalsın
-      const off = (side[0] ? bd.w : bd.d) / 2 + 1.2 + R() * 1.2;
-      const x = bd.x + side[0] * off + (side[0] ? 0 : t), z = bd.z + side[1] * off + (side[0] ? t : 0);
-      if (pathDist(x, z) < 2.4 || inBox(x, z, 0.2)) continue;
-      flowerSpots.push([x, z]);
+  for (const a of campus.areas || []) {
+    if (a.type !== 'garden') continue;
+    for (let i = 0; i < (a.w * a.d) / 4; i++) {
+      const x = a.x + (R() - 0.5) * (a.w - 1), z = a.z + (R() - 0.5) * (a.d - 1);
+      if (!blocked(x, z, 0.1)) flowerSpots.push([x, z]);
     }
   }
-  const flowerGeo = new THREE.IcosahedronGeometry(0.11, 0);
-  const flowers = new THREE.InstancedMesh(flowerGeo, new THREE.MeshLambertMaterial({ color: '#ffffff' }), flowerSpots.length);
+  for (const bd of campus.buildings) {
+    if (!bd.labelSide && bd.style !== 'pinkstripe') continue;
+    const sides = bd.labelSide ? [bd.labelSide] : ['w'];
+    for (const sideKey of sides) {
+      const side = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] }[sideKey];
+      const len = side[0] ? bd.d : bd.w;
+      for (let i = 0; i < len * 4; i++) {
+        const t = (R() - 0.5) * (len - 2);
+        if (Math.abs(t) < 4 && bd.labelSide) continue; // girişin önü boş qalsın
+        const off = (side[0] ? bd.w : bd.d) / 2 + 1 + R() * 1.4;
+        const x = bd.x + side[0] * off + (side[0] ? 0 : t), z = bd.z + side[1] * off + (side[0] ? t : 0);
+        if (!blocked(x, z, 0.1)) flowerSpots.push([x, z]);
+      }
+    }
+  }
+  const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.11, 0), new THREE.MeshLambertMaterial({ color: '#ffffff' }), flowerSpots.length);
   const petals = ['#ff5d73', '#ffd166', '#ffffff', '#b388eb', '#ff8fab', '#ff9f1c'];
   flowerSpots.forEach(([x, z], i) => {
     dummy.position.set(x, 0.18 + R() * 0.12, z);
@@ -199,27 +200,22 @@ export function addDecor(scene, campus, ctx, R, quality) {
     flowers.setColorAt(i, col.set(petals[Math.floor(R() * petals.length)]));
   });
   scene.add(flowers);
-  // çiçək ləkləri (torpaq)
-  const bedMat = new THREE.MeshLambertMaterial({ color: '#6b4a2b' });
-  const bed = new THREE.Mesh(new THREE.RingGeometry(26, 28, 64), bedMat);
-  bed.rotation.x = -Math.PI / 2;
-  bed.position.y = 0.035;
-  bed.receiveShadow = true;
-  scene.add(bed);
 
   // ---- Ot dəstələri ----
   if (quality !== 'low') {
-    const count = 14000;
-    const tuftGeo = new THREE.ConeGeometry(0.045, 0.24, 3);
-    tuftGeo.translate(0, 0.12, 0);
+    const count = 26000;
+    const tuftGeo = new THREE.ConeGeometry(0.045, 0.26, 3);
+    tuftGeo.translate(0, 0.13, 0);
     const tufts = new THREE.InstancedMesh(tuftGeo, new THREE.MeshLambertMaterial({ color: '#ffffff' }), count);
-    const grassCols = ['#6fa85a', '#7fb069', '#5e9a4c', '#8cbf6e', '#679e52'];
+    const grassCols = ['#6fa85a', '#7fb069', '#5e9a4c', '#8cbf6e', '#9aa565', '#8a9a55'];
     let n = 0;
     for (let tries = 0; tries < count * 3 && n < count; tries++) {
       const x = b.minX + R() * (b.maxX - b.minX), z = b.minZ + R() * (b.maxZ - b.minZ);
-      if (inBox(x, z, 0.4) || inSpecial(x, z, 0.5) || pathDist(x, z) < 2.4) continue;
+      if (ctx.colliders.some((c) => x > c.minX - 0.3 && x < c.maxX + 0.3 && z > c.minZ - 0.3 && z < c.maxZ + 0.3)) continue;
+      if (ctx.hardAreas.some((a) => Math.abs(x - a.x) < a.w / 2 + 0.3 && Math.abs(z - a.z) < a.d / 2 + 0.3)) continue;
+      if (edges.some((e) => segDist(x, z, e) < e.half + 0.3)) continue;
       dummy.position.set(x, 0, z);
-      const s = 0.7 + R() * 0.9;
+      const s = 0.7 + R() * 1;
       dummy.scale.set(s, s * (0.8 + R() * 0.6), s);
       dummy.rotation.set((R() - 0.5) * 0.4, R() * 6, (R() - 0.5) * 0.4);
       dummy.updateMatrix();
@@ -232,12 +228,11 @@ export function addDecor(scene, campus, ctx, R, quality) {
   }
 
   // ---- Daşlar ----
-  const rockGeo = new THREE.DodecahedronGeometry(1, 0);
-  const rocks = new THREE.InstancedMesh(rockGeo, new THREE.MeshLambertMaterial({ color: '#9a9a94', flatShading: true }), 40);
+  const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: '#9a9a94', flatShading: true }), 80);
   let rn = 0;
-  for (let tries = 0; tries < 400 && rn < 40; tries++) {
+  for (let tries = 0; tries < 800 && rn < 80; tries++) {
     const x = b.minX + 3 + R() * (b.maxX - b.minX - 6), z = b.minZ + 3 + R() * (b.maxZ - b.minZ - 6);
-    if (inBox(x, z, 2) || inSpecial(x, z, 2) || pathDist(x, z) < 4) continue;
+    if (blocked(x, z, 2)) continue;
     const s = 0.3 + R() * 0.6;
     dummy.position.set(x, s * 0.3, z);
     dummy.scale.set(s * 1.3, s * 0.8, s);
@@ -248,4 +243,10 @@ export function addDecor(scene, campus, ctx, R, quality) {
   rocks.count = rn;
   rocks.castShadow = rocks.receiveShadow = true;
   scene.add(rocks);
+}
+
+function segDist(x, z, e) {
+  const dx = e.x2 - e.x1, dz = e.z2 - e.z1;
+  const t = Math.max(0, Math.min(1, ((x - e.x1) * dx + (z - e.z1) * dz) / (dx * dx + dz * dz)));
+  return Math.hypot(x - (e.x1 + t * dx), z - (e.z1 + t * dz));
 }
