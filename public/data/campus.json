@@ -1,0 +1,64 @@
+{
+  "_note": "Təxmini düzüm. Koordinatlar metrlə: x şərqə, z cənuba. Şəkillər gəldikdən sonra dəqiqləşdiriləcək.",
+  "bounds": { "minX": -150, "maxX": 150, "minZ": -150, "maxZ": 150 },
+  "spawn": { "x": 0, "z": 45, "ry": 3.14159 },
+  "buildings": [
+    { "id": "main",    "name": "Əsas korpus",           "x": 0,    "z": -50,   "w": 120, "d": 25, "h": 16, "color": "#d8cbb0", "roof": "#8a7f6a", "labelSide": "s" },
+    { "id": "wingE",   "name": "",                      "x": 50,   "z": -23.75,"w": 20,  "d": 27.5,"h": 16, "color": "#d8cbb0", "roof": "#8a7f6a", "labelSide": "" },
+    { "id": "wingW",   "name": "",                      "x": -50,  "z": -23.75,"w": 20,  "d": 27.5,"h": 16, "color": "#d8cbb0", "roof": "#8a7f6a", "labelSide": "" },
+    { "id": "newBld",  "name": "Yeni tədris korpusu",   "x": 92,   "z": 30,    "w": 30,  "d": 50, "h": 20, "color": "#b9c7d4", "roof": "#56636e", "labelSide": "w" },
+    { "id": "library", "name": "Kitabxana",             "x": -87,  "z": 30,    "w": 30,  "d": 25, "h": 10, "color": "#c9a27a", "roof": "#6e4f35", "labelSide": "e" },
+    { "id": "gym",     "name": "İdman zalı",            "x": 92,   "z": -60,   "w": 40,  "d": 30, "h": 12, "color": "#9fb8a0", "roof": "#4d6650", "labelSide": "w" },
+    { "id": "dorm",    "name": "Yataqxana",             "x": -95,  "z": -60,   "w": 25,  "d": 45, "h": 18, "color": "#e0b8a0", "roof": "#7a5848", "labelSide": "e" },
+    { "id": "techno",  "name": "Texnopark",             "x": -92,  "z": 95,    "w": 30,  "d": 20, "h": 8,  "color": "#a7b3c9", "roof": "#3f4a5e", "labelSide": "e" },
+    { "id": "cafe",    "name": "Yeməkxana",             "x": 47,   "z": 85,    "w": 25,  "d": 18, "h": 6,  "color": "#f0d58c", "roof": "#8a6d2a", "labelSide": "w" }
+  ],
+  "fountain": { "x": 0, "z": 0, "r": 5 },
+  "field": { "x": 0, "z": -105, "w": 90, "d": 50 },
+  "parking": { "x": 75, "z": 120, "w": 50, "d": 30 },
+  "gate": { "x": 0, "z": 140 },
+  "gallows": { "x": -45, "z": 58, "platformH": 1.4, "slots": 3, "slotGap": 1.9 },
+  "npcs": [
+    {
+      "name": "Rəhman", "x": -39.6, "z": 59.2, "ry": 0.25, "say": "Meydandayıq",
+      "appearance": {
+        "body": "m", "hair": "short", "hairColor": "#141010", "beard": "stubble", "brows": "thick",
+        "top": "jacket", "topColor": "#22313f", "topColor2": "#ffffff", "pattern": "plain",
+        "bottom": "jeans", "bottomColor": "#2b4a7a", "shoeType": "sneakers", "shoes": "#222222", "muscle": 0.5
+      }
+    }
+  ],
+  "nodes": {
+    "gate": [0, 135],
+    "r1":   [0, 85],
+    "r2":   [0, 35],
+    "ps":   [0, 22],
+    "pe":   [22, 0],
+    "pw":   [-22, 0],
+    "pn":   [0, -25],
+    "e1":   [70, 0],
+    "e2":   [72, 30],
+    "e3":   [68, -35],
+    "e4":   [66, -62],
+    "e5":   [66, -85],
+    "f1":   [40, -100],
+    "w1":   [-68, 0],
+    "w2":   [-66, 30],
+    "w3":   [-68, -35],
+    "w4":   [-77, -60],
+    "w5":   [-68, -85],
+    "f2":   [-40, -100],
+    "cafe": [30, 85],
+    "tech": [-72, 92],
+    "park": [45, 118],
+    "gal":  [-38, 64]
+  },
+  "edges": [
+    ["gate", "r1"], ["r1", "r2"], ["r2", "ps"],
+    ["ps", "pe"], ["pe", "pn"], ["pn", "pw"], ["pw", "ps"],
+    ["pe", "e1"], ["e1", "e2"], ["e1", "e3"], ["e3", "e4"], ["e4", "e5"], ["e5", "f1"],
+    ["pw", "w1"], ["w1", "w2"], ["w1", "w3"], ["w3", "w4"], ["w3", "w5"], ["w5", "f2"],
+    ["f1", "f2"],
+    ["r1", "cafe"], ["r1", "tech"], ["gate", "park"], ["r2", "gal"]
+  ]
+}

@@ -1,0 +1,11 @@
+# Asılılıqlar (npm install ilə yenidən qurulur)
+node_modules/
+
+# Oyunçu məlumatları — PIN heşləri və şəxsi məlumatlar repoya düşməməlidir
+/data/
+
+# Yerli ayarlar
+.claude/settings.local.json
+*.log
+.DS_Store
+Thumbs.db

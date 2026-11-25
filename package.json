@@ -1,0 +1,14 @@
+{
+  "name": "bmu-online",
+  "version": "0.1.0",
+  "description": "BMU Online - brauzerdə multiplayer kampus oyunu (prototip)",
+  "main": "server/server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "three": "^0.170.0",
+    "ws": "^8.18.0"
+  }
+}

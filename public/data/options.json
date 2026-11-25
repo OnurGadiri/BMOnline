@@ -1,0 +1,93 @@
+{
+  "enums": {
+    "body": ["m", "f"],
+    "faceShape": ["oval", "round", "square"],
+    "eyeShape": ["normal", "big", "narrow", "sleepy"],
+    "brows": ["thin", "normal", "thick", "angry"],
+    "nose": ["small", "normal", "big", "pointy"],
+    "mouth": ["smile", "neutral", "open", "smirk"],
+    "beard": ["none", "stubble", "mustache", "goatee", "full"],
+    "cheeks": ["none", "blush", "freckles"],
+    "hair": ["buzz", "short", "side", "spiky", "curly", "afro", "long", "ponytail", "bun", "bob", "braids", "mohawk", "bald"],
+    "top": ["tshirt", "hoodie", "jacket", "shirt", "sweater", "tank", "dress"],
+    "pattern": ["plain", "stripes", "logo", "star", "heart", "number"],
+    "bottom": ["jeans", "pants", "shorts", "skirt", "longskirt"],
+    "shoeType": ["sneakers", "boots", "formal"],
+    "hat": ["none", "hijab", "cap", "beanie", "fedora", "headband"],
+    "glasses": ["none", "round", "square", "sun"],
+    "bag": ["none", "backpack", "shoulder"],
+    "earrings": ["none", "studs", "hoops"],
+    "neck": ["none", "scarf", "chain", "tie"]
+  },
+  "colors": ["skin", "hairColor", "eyes", "lipColor", "topColor", "topColor2", "bottomColor", "shoes", "accColor"],
+  "ranges": {
+    "height": [0.88, 1.12],
+    "build": [0.8, 1.25],
+    "muscle": [0, 1],
+    "headSize": [0.9, 1.12],
+    "legLen": [0.92, 1.08]
+  },
+  "labels": {
+    "body": { "m": "Kişi", "f": "Qadın" },
+    "faceShape": { "oval": "Oval", "round": "Dəyirmi", "square": "Kvadrat" },
+    "eyeShape": { "normal": "Normal", "big": "İri", "narrow": "Dar", "sleepy": "Yuxulu" },
+    "brows": { "thin": "Nazik", "normal": "Normal", "thick": "Qalın", "angry": "Qəzəbli" },
+    "nose": { "small": "Kiçik", "normal": "Normal", "big": "Böyük", "pointy": "Şiş" },
+    "mouth": { "smile": "Gülüş", "neutral": "Sakit", "open": "Açıq gülüş", "smirk": "Yarım gülüş" },
+    "beard": { "none": "Yoxdur", "stubble": "Tük", "mustache": "Bığ", "goatee": "Keçi saqqal", "full": "Tam saqqal" },
+    "cheeks": { "none": "Yoxdur", "blush": "Qızartı", "freckles": "Çil" },
+    "hair": { "buzz": "Maşınla", "short": "Qısa", "side": "Yana daranmış", "spiky": "Tikanlı", "curly": "Qıvrım", "afro": "Afro", "long": "Uzun", "ponytail": "Quyruq", "bun": "Topuz", "bob": "Bob", "braids": "Hörük", "mohawk": "İrokez", "bald": "Keçəl" },
+    "top": { "tshirt": "Futbolka", "hoodie": "Hudi", "jacket": "Gödəkçə", "shirt": "Köynək", "sweater": "Sviter", "tank": "Mayka", "dress": "Don" },
+    "pattern": { "plain": "Sadə", "stripes": "Zolaqlı", "logo": "BMU loqo", "star": "Ulduz", "heart": "Ürək", "number": "Nömrə" },
+    "bottom": { "jeans": "Cins", "pants": "Şalvar", "shorts": "Şort", "skirt": "Qısa yubka", "longskirt": "Uzun yubka" },
+    "shoeType": { "sneakers": "İdman", "boots": "Çəkmə", "formal": "Klassik" },
+    "hat": { "none": "Yoxdur", "hijab": "Hicab", "cap": "Kepka", "beanie": "Toxunma papaq", "fedora": "Şlyapa", "headband": "Saç bandı" },
+    "glasses": { "none": "Yoxdur", "round": "Dəyirmi", "square": "Kvadrat", "sun": "Gün eynəyi" },
+    "bag": { "none": "Yoxdur", "backpack": "Bel çantası", "shoulder": "Çiyin çantası" },
+    "earrings": { "none": "Yoxdur", "studs": "Daş sırğa", "hoops": "Halqa sırğa" },
+    "neck": { "none": "Yoxdur", "scarf": "Şərf", "chain": "Zəncir", "tie": "Qalstuk" }
+  },
+  "palettes": {
+    "skin": ["#ffe0c7", "#f6d0b1", "#eabf98", "#d9a47a", "#c68b5e", "#a86b44", "#8a5436", "#5e3824"],
+    "hairColor": ["#141010", "#2e1d14", "#4a2e1c", "#6b4226", "#9a6a3a", "#d4aa63", "#efd9a1", "#a8321f", "#8c8c8c", "#e8e8e8", "#2f55b5", "#c2448e"],
+    "eyes": ["#3b2416", "#6b4226", "#2e6b3a", "#5b8c4a", "#2a5aa8", "#6fa3d8", "#6b6b6b", "#1b1410"],
+    "lipColor": ["#c97a6f", "#b5524f", "#d64561", "#9e3a4a", "#e08a8a", "#8a4a3a"],
+    "topColor": ["#e63946", "#1d3557", "#457b9d", "#2a9d8f", "#06a77d", "#f4a261", "#ffd166", "#ffffff", "#222222", "#6a4c93", "#ff8fab", "#8d99ae"],
+    "topColor2": ["#ffffff", "#222222", "#ffd166", "#e63946", "#1d3557", "#2a9d8f"],
+    "bottomColor": ["#2b4a7a", "#3d5a80", "#22313f", "#222222", "#5c4033", "#8d99ae", "#c9ada7", "#6b705c", "#e63946", "#ffffff"],
+    "shoes": ["#ffffff", "#222222", "#8b5a2b", "#e63946", "#3d5a80", "#ffd166"],
+    "accColor": ["#222222", "#e63946", "#1d3557", "#ffd166", "#2a9d8f", "#ffffff", "#6a4c93", "#8b5a2b"]
+  },
+  "default": {
+    "body": "m", "skin": "#eabf98", "height": 1.0, "build": 1.0, "muscle": 0.4, "headSize": 1.0, "legLen": 1.0,
+    "faceShape": "oval", "eyeShape": "normal", "eyes": "#4a2e1c", "brows": "normal", "nose": "normal",
+    "mouth": "smile", "lipColor": "#c97a6f", "beard": "none", "cheeks": "none",
+    "hair": "short", "hairColor": "#2e1d14",
+    "top": "hoodie", "pattern": "logo", "topColor": "#1d3557", "topColor2": "#ffd166",
+    "bottom": "jeans", "bottomColor": "#2b4a7a", "shoeType": "sneakers", "shoes": "#ffffff",
+    "hat": "none", "glasses": "none", "bag": "none", "earrings": "none", "neck": "none", "accColor": "#222222"
+  },
+  "dummyNames": [
+    "Qara Quldur", "Saxtakar Səfər", "Kölgə Cəlil", "Oğru Pişik", "Dəmir Bığ", "Qorxunc Kapitan",
+    "Hiyləgər Tülkü", "Dəli Dərviş", "Cibgir Cümşüd", "Yalançı Yavər", "Gecə Bayquşu", "Qızıl Diş",
+    "Paxıl Paşa", "Tənbəl Tərlan", "Qarğa Qasım", "Şeytan Şəbnəm", "Bic Bəhram", "Qəddar Qəmər",
+    "Dəmir Dayı", "Kələkbaz Kamil", "Boşboğaz Bəşir", "Qumarbaz Qulu", "Zəhrimar Zakir", "Ac Qurd",
+    "Sirli Maska", "Gecikən Tələbə", "Kopyaçı Kərim", "Şpargalka Şirin", "Quyruqlu Fənn", "Sessiya Canavarı",
+    "Dedlayn Dəvi", "Wi-Fi Oğrusu", "Növbə Pozan", "Çay Düşməni", "Telefon Manyakı", "Laqqırtı Lalə", "Günel"
+  ],
+  "genderDefaults": {
+    "m": { "hair": "short", "brows": "normal", "eyeShape": "normal", "muscle": 0.45, "build": 1.0, "earrings": "none" },
+    "f": { "hair": "long", "brows": "thin", "eyeShape": "big", "beard": "none", "muscle": 0.1, "build": 0.92, "lipColor": "#d64561" }
+  },
+  "presets": [
+    { "name": "Birinci kurs", "a": { "body": "m", "hair": "side", "top": "hoodie", "pattern": "logo", "topColor": "#1d3557", "topColor2": "#ffd166", "bottom": "jeans", "bag": "backpack", "accColor": "#e63946" } },
+    { "name": "Proqramçı", "a": { "body": "m", "hair": "curly", "hairColor": "#141010", "glasses": "square", "top": "tshirt", "pattern": "number", "topColor": "#222222", "topColor2": "#06a77d", "bottom": "pants", "bottomColor": "#22313f", "neck": "none", "beard": "stubble", "mouth": "smirk" } },
+    { "name": "İdmançı", "a": { "body": "m", "hair": "buzz", "muscle": 1, "build": 1.1, "top": "tank", "pattern": "stripes", "topColor": "#e63946", "topColor2": "#ffffff", "bottom": "shorts", "bottomColor": "#222222", "shoeType": "sneakers", "shoes": "#ffd166", "hat": "headband", "accColor": "#ffffff" } },
+    { "name": "Müəllim", "a": { "body": "m", "hair": "short", "hairColor": "#8c8c8c", "beard": "full", "glasses": "round", "top": "jacket", "topColor": "#5c4033", "topColor2": "#ffffff", "pattern": "plain", "bottom": "pants", "bottomColor": "#22313f", "shoeType": "formal", "shoes": "#222222", "neck": "tie", "accColor": "#1d3557", "mouth": "neutral" } },
+    { "name": "Memar", "a": { "body": "f", "hair": "bun", "hairColor": "#4a2e1c", "glasses": "round", "top": "shirt", "topColor": "#ffffff", "pattern": "plain", "bottom": "longskirt", "bottomColor": "#6b705c", "shoeType": "formal", "shoes": "#8b5a2b", "bag": "shoulder", "accColor": "#8b5a2b", "earrings": "studs" } },
+    { "name": "Tələbə qız", "a": { "body": "f", "hair": "ponytail", "hairColor": "#2e1d14", "top": "sweater", "topColor": "#ff8fab", "pattern": "heart", "topColor2": "#ffffff", "bottom": "jeans", "bottomColor": "#3d5a80", "bag": "backpack", "accColor": "#6a4c93", "cheeks": "blush", "earrings": "hoops" } },
+    { "name": "Rəssam", "a": { "body": "f", "hair": "bob", "hairColor": "#a8321f", "hat": "beanie", "accColor": "#2a9d8f", "top": "dress", "topColor": "#ffd166", "pattern": "star", "topColor2": "#e63946", "cheeks": "freckles", "shoeType": "boots", "shoes": "#5c4033", "neck": "scarf" } },
+    { "name": "Mühəndis qız", "a": { "body": "f", "hat": "hijab", "accColor": "#1d3557", "hair": "bun", "top": "jacket", "topColor": "#8d99ae", "topColor2": "#ffffff", "pattern": "plain", "bottom": "longskirt", "bottomColor": "#22313f", "shoeType": "formal", "shoes": "#222222", "bag": "shoulder", "glasses": "round", "mouth": "smile" } },
+    { "name": "Ulduz", "a": { "body": "f", "hair": "long", "hairColor": "#efd9a1", "glasses": "sun", "top": "jacket", "topColor": "#222222", "topColor2": "#e63946", "pattern": "plain", "bottom": "skirt", "bottomColor": "#222222", "shoeType": "boots", "shoes": "#222222", "neck": "chain", "earrings": "hoops", "lipColor": "#d64561" } }
+  ]
+}
