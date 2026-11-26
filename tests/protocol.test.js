@@ -201,6 +201,19 @@ async function enter(name, pin = '1234') {
   const gl2 = A.c.waitT('gallows', 1500, (m) => !m.slots.some(Boolean));
   A.c.send({ t: 'gallowsRemove', id });
   ok('məhkum azad edilir', !!(await gl2));
+  // çarmıx: eyni qaydalar
+  await sleep(15_100); // məhkum göndərmə fasiləsi (15 san)
+  A.c.pos = await A.c.walkTo(A.c.pos, { x: -105, z: -135 }, 8.5);
+  await sleep(150);
+  const cr = A.c.waitT('gallows', 1500, (m) => (m.crucifix || []).some((s) => s && s.name === 'Gecə Bayquşu'));
+  A.c.send({ t: 'gallowsDummy', site: 'crucifix', name: 'Gecə Bayquşu', appearance: {} });
+  const c1 = await cr;
+  ok('məhkum çarmıxa gəlir', !!c1);
+  ok('çarmıx dar ağacından ayrı yerlərdir', !!c1 && !c1.slots.some(Boolean));
+  const cid = c1?.crucifix.find(Boolean)?.id;
+  const cr2 = A.c.waitT('gallows', 1500, (m) => !(m.crucifix || []).some(Boolean));
+  A.c.send({ t: 'gallowsRemove', id: cid });
+  ok('çarmıxdakı məhkum azad edilir', !!(await cr2));
 
   // --- 8b. İnteraksiyalar: cədvəl, ulduz, basketbol, oturmaq ---
   A.c.send({ t: 'board' });

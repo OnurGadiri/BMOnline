@@ -61,6 +61,7 @@ if (pd.billboard) objects.push(['lövhə', pd.billboard.x, pd.billboard.z, 1.5])
 if (pd.monument) objects.push(['abidə', pd.monument.x, pd.monument.z, 1.5]);
 for (const n of C.npcs || []) objects.push([`NPC ${n.name}`, n.x, n.z, 0.5]);
 if (C.gallows) objects.push(['dar ağacı', C.gallows.x, C.gallows.z, 4]);
+if (C.crucifix) objects.push(['çarmıx', C.crucifix.x, C.crucifix.z, (C.crucifix.slots * C.crucifix.slotGap + 2) / 2]);
 objects.push(['doğulma nöqtəsi', C.spawn.x, C.spawn.z, 0.5]);
 for (const [name, x, z, r] of objects) {
   const e = onRoad(x, z, r);

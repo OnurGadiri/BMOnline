@@ -602,6 +602,13 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.armLx = T.armRx = -0.55; T.armLz = 0.12; T.armRz = -0.12; T.elbowL = T.elbowR = -0.75;
     T.spineX = -0.06;
     T.headY = Math.sin(t * 0.35) * 0.35; T.headX = Math.sin(t * 0.23) * 0.08;
+  } else if (emote === 6) {
+    // çarmıxda: qollar yana düz açıq (biləklərdən bağlı), baş bir az aşağı
+    T.armLz = 1.52; T.armRz = -1.52; T.armLx = 0; T.armRx = 0;
+    T.elbowL = T.elbowR = 0;
+    T.legL = T.legR = 0; T.kneeL = T.kneeR = 0.05;
+    T.headX = 0.35 + Math.sin(t * 0.6) * 0.05; T.headY = Math.sin(t * 0.4) * 0.2;
+    T.spineX = 0.03;
   } else if (emote === 4) {
     // dar ağacında: əllər arxada bağlı, baş aşağı; çırpınanda yırğalanır
     const st = opt.struggle ? Math.sin(t * 22) : 0;

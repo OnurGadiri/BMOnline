@@ -787,8 +787,9 @@ export function buildWorld(scene, campus, quality = 'high') {
     scene.add(netCone);
   }
 
-  // --- Dar ağacı ---
+  // --- Dar ağacı və çarmıx ---
   if (campus.gallows) buildGallows(scene, campus.gallows, colliders);
+  if (campus.crucifix) buildCrucifix(scene, campus.crucifix, colliders);
 
   // --- Hasar və darvaza ---
   const fenceMat = lambert('#4a4f57');
@@ -1400,6 +1401,55 @@ function buildGallows(scene, g, colliders) {
   box(0.1, 0.5, 0.1, woodDark, 0.9, beamY + 0.3, -0.2);
   colliders.push({ minX: g.x - W / 2, maxX: g.x + W / 2, minZ: g.z - D / 2, maxZ: g.z + D / 2, h: H + postH });
   colliders.push({ minX: g.x - 1, maxX: g.x + 1, minZ: g.z + D / 2, maxZ: g.z + D / 2 + 0.45 * steps, h: H });
+}
+
+// ======================= Çarmıx =======================
+
+/** Çarmıxdakı məhkumun yeri: ayaqları taxta dayaqda, üzü +z tərəfə */
+export function crucifixSlot(c, i) {
+  return { x: c.x + (i - (c.slots - 1) / 2) * c.slotGap, y: c.footH, z: c.z + 0.28 };
+}
+
+function buildCrucifix(scene, c, colliders) {
+  const wood = new THREE.MeshLambertMaterial({ color: '#6e4a2a' });
+  const woodDark = new THREE.MeshLambertMaterial({ color: '#53361d' });
+  const rope = new THREE.MeshLambertMaterial({ color: '#c8a96a' });
+  const stone = new THREE.MeshLambertMaterial({ color: '#8f8a80', flatShading: true });
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    const o = new THREE.Mesh(geo, m);
+    o.position.set(x, y, z);
+    o.rotation.set(rx, ry, rz);
+    o.castShadow = o.receiveShadow = true;
+    scene.add(o);
+    return o;
+  };
+  // ümumi alçaq daş təpəcik
+  const W = c.slots * c.slotGap + 2;
+  add(new THREE.BoxGeometry(W, 0.35, 4), stone, c.x, 0.17, c.z);
+  for (let i = 0; i < c.slots; i++) {
+    const s = crucifixSlot(c, i);
+    const x = s.x, z = c.z;
+    add(new THREE.BoxGeometry(0.32, 4.6, 0.3), wood, x, 2.3, z);                  // dik dirək
+    add(new THREE.BoxGeometry(2.5, 0.28, 0.28), wood, x, c.footH + 1.48, z);      // köndələn tir (çiyin hündürlüyü)
+    add(new THREE.BoxGeometry(0.55, 0.12, 0.4), woodDark, x, c.footH - 0.06, z + 0.22); // ayaq dayağı
+    for (let k = 0; k < 3; k++) add(new THREE.BoxGeometry(0.34, 0.08, 0.32), woodDark, x, 0.45 + k * 0.08, z); // dibində pazlar
+    // biləklərdəki kəndirlər
+    for (const sx of [-1, 1]) add(new THREE.TorusGeometry(0.1, 0.025, 6, 12), rope, x + sx * 0.88, c.footH + 1.48, z, 0, Math.PI / 2, 0);
+    colliders.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.5, h: 4.6 });
+  }
+  // lövhə
+  const signTex = canvasTex(512, 128, (g, w, h) => {
+    g.fillStyle = '#3b2412'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#c8a96a'; g.lineWidth = 8; g.strokeRect(6, 6, w - 12, h - 12);
+    g.fillStyle = '#f0d9a8'; g.font = 'bold 64px Georgia, serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('ÇARMIX', w / 2, h / 2 + 4);
+  });
+  const post = add(new THREE.BoxGeometry(0.12, 1.6, 0.12), woodDark, c.x + W / 2 + 0.6, 0.8, c.z + 1.6);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.48), new THREE.MeshLambertMaterial({ map: signTex }));
+  sign.position.set(post.position.x, 1.75, post.position.z + 0.07);
+  scene.add(sign);
+  colliders.push({ minX: c.x - W / 2, maxX: c.x + W / 2, minZ: c.z - 2, maxZ: c.z + 2, h: 0.35 });
 }
 
 // ======================= Toqquşma =======================

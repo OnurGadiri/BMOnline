@@ -56,6 +56,11 @@ export class Minimap {
       g.fillStyle = '#5a3a20';
       g.fillRect(this.lx(c.gallows.x - 4), this.lz(c.gallows.z - 2), 8 * PX, 4 * PX);
     }
+    if (c.crucifix) {
+      g.fillStyle = '#6e4a2a';
+      const w = c.crucifix.slots * c.crucifix.slotGap + 2;
+      g.fillRect(this.lx(c.crucifix.x - w / 2), this.lz(c.crucifix.z - 2), w * PX, 4 * PX);
+    }
     return cv;
   }
 
@@ -103,10 +108,9 @@ export class Minimap {
         g.fillStyle = '#fff';
         g.fillText(bd.name, sx(bd.x), sz(bd.z) + 4);
       }
-      if (this.c.gallows) {
-        g.fillStyle = '#ffcf9a';
-        g.fillText('Dar ağacı', sx(this.c.gallows.x), sz(this.c.gallows.z) - 10);
-      }
+      g.fillStyle = '#ffcf9a';
+      if (this.c.gallows) g.fillText('Dar ağacı', sx(this.c.gallows.x), sz(this.c.gallows.z) - 10);
+      if (this.c.crucifix) g.fillText('Çarmıx', sx(this.c.crucifix.x), sz(this.c.crucifix.z) + 18);
     }
     // ulduzlar
     for (const s of stars?.values() || []) {

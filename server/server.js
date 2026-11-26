@@ -198,21 +198,21 @@ function broadcast(msg, except) {
   for (const ws of wss.clients) if (ws !== except && ws.readyState === 1 && ws.inGame) ws.send(s);
 }
 
-// ---------- Dar ağacı ----------
-const G = CAMPUS.gallows;
-// Real oyunçular dar ağacına çəkilmir. Oyunçular uydurma adlı "məhkum" NPC yaradıb göndərir.
+// ---------- Dar ağacı və çarmıx ----------
+// Real oyunçular buraya çəkilmir. Oyunçular uydurma adlı "məhkum" NPC yaradıb göndərir.
 const DUMMY_TIME = 120_000;      // məhkum neçə ms qalır
 const DUMMY_COOLDOWN = 15_000;   // eyni oyunçu neçə ms-dən bir məhkum göndərə bilər
 const DUMMY_NAMES = new Set(OPTIONS.dummyNames);
-const slots = new Array(G.slots).fill(null); // { id, name, appearance, until, by }
 let dummySeq = 0;
-const nearGallows = (e) => Math.hypot(e.x - G.x, e.z - (G.z + 3)) < 9;
+// hər yer: konfiqurasiya, məhkum yerləri, yaxınlıq nöqtəsi, mesaj sözləri
+const SITES = {};
+if (CAMPUS.gallows) SITES.gallows = { cfg: CAMPUS.gallows, slots: new Array(CAMPUS.gallows.slots).fill(null), front: 3, icon: '⚖', where: 'dar ağacına' };
+if (CAMPUS.crucifix) SITES.crucifix = { cfg: CAMPUS.crucifix, slots: new Array(CAMPUS.crucifix.slots).fill(null), front: 2.5, icon: '✝', where: 'çarmıxa' };
+const nearSite = (site, e) => site && Math.hypot(e.x - site.cfg.x, e.z - (site.cfg.z + site.front)) < 10;
 
 function gallowsState() {
-  return {
-    t: 'gallows',
-    slots: slots.map((d) => d && { id: d.id, name: d.name, appearance: d.appearance, by: d.by, left: Math.max(0, d.until - Date.now()) }),
-  };
+  const pack = (slots) => slots.map((d) => d && { id: d.id, name: d.name, appearance: d.appearance, by: d.by, left: Math.max(0, d.until - Date.now()) });
+  return { t: 'gallows', slots: pack(SITES.gallows?.slots || []), crucifix: pack(SITES.crucifix?.slots || []) };
 }
 
 // ---------- Döyüş ----------
@@ -661,8 +661,9 @@ wss.on('connection', (ws, req) => {
     if (m.t === 'gallowsDummy' && ws.inGame) {
       const actor = entities.get(ws.key);
       const now = Date.now();
-      if (!actor) return;
-      if (!nearGallows(actor)) return send(ws, { t: 'error', msg: 'Əvvəlcə dar ağacına yaxınlaş.' });
+      const site = SITES[m.site === 'crucifix' ? 'crucifix' : 'gallows'];
+      if (!actor || !site) return;
+      if (!nearSite(site, actor)) return send(ws, { t: 'error', msg: `Əvvəlcə ${site.where} yaxınlaş.` });
       const name = String(m.name || '');
       if (!DUMMY_NAMES.has(name)) return send(ws, { t: 'error', msg: 'Adı siyahıdan seç.' });
       const appearance = validAppearance(m.appearance);
@@ -670,20 +671,23 @@ wss.on('connection', (ws, req) => {
       const wait = DUMMY_COOLDOWN - (now - (ws.lastDummy || 0));
       if (wait > 0) return send(ws, { t: 'error', msg: `Bir az gözlə: ${Math.ceil(wait / 1000)} san.` });
       // boş yer yoxdursa, ən köhnə məhkumu əvəz et
+      const slots = site.slots;
       let i = slots.indexOf(null);
       if (i < 0) i = slots.reduce((best, d, j) => (d.until < slots[best].until ? j : best), 0);
       slots[i] = { id: `d${++dummySeq}`, name, appearance, until: now + DUMMY_TIME, by: acc.name };
       ws.lastDummy = now;
       broadcast(gallowsState());
-      broadcast({ t: 'sys', msg: `⚖ ${acc.name} "${name}" adlı məhkumu dar ağacına gətirdi.` });
+      broadcast({ t: 'sys', msg: `${site.icon} ${acc.name} "${name}" adlı məhkumu ${site.where} gətirdi.` });
       return;
     }
 
     if (m.t === 'gallowsRemove' && ws.inGame) {
       const actor = entities.get(ws.key);
+      const site = Object.values(SITES).find((s) => s.slots.some((d) => d && d.id === m.id));
+      if (!actor || !site) return;
+      const slots = site.slots;
       const i = slots.findIndex((d) => d && d.id === m.id);
-      if (!actor || i < 0) return;
-      if (!nearGallows(actor)) return send(ws, { t: 'error', msg: 'Əvvəlcə dar ağacına yaxınlaş.' });
+      if (!nearSite(site, actor)) return send(ws, { t: 'error', msg: `Əvvəlcə ${site.where} yaxınlaş.` });
       const d = slots[i];
       slots[i] = null;
       broadcast(gallowsState());
@@ -766,7 +770,9 @@ setInterval(() => {
   }
   // vaxtı bitən məhkumlar yox olur
   let changed = false;
-  slots.forEach((d, i) => { if (d && now > d.until) { slots[i] = null; changed = true; } });
+  for (const site of Object.values(SITES)) {
+    site.slots.forEach((d, i) => { if (d && now > d.until) { site.slots[i] = null; changed = true; } });
+  }
   if (changed) broadcast(gallowsState());
   const snap = [];
   for (const e of entities.values()) {

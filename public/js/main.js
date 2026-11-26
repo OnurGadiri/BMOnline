@@ -1,7 +1,7 @@
 // BMU Online — əsas oyun faylı
 import * as THREE from 'three';
 import { buildCharacter, animateRig, makeNameTag, setCharacterDefaults } from './character.js';
-import { buildWorld, resolveCollisions, gallowsSlot } from './world.js';
+import { buildWorld, resolveCollisions, gallowsSlot, crucifixSlot } from './world.js';
 import { Creator } from './creator.js';
 import { SUN_DIR } from './decor.js';
 import { makeSpeechBubble, makePistol } from './character.js';
@@ -168,7 +168,8 @@ function handle(m) {
       break;
     case 'error': toast(m.msg); break;
     case 'gallows':
-      gallows.slots = m.slots;
+      if (SITES.gallows) SITES.gallows.slots = m.slots || [];
+      if (SITES.crucifix) SITES.crucifix.slots = m.crucifix || [];
       gallows.at = performance.now();
       syncDummies();
       renderGallowsSlots();
@@ -367,39 +368,58 @@ function updateCombatHud() {
   document.body.classList.toggle('aiming', player.weapon === 1 && !player.dead);
 }
 
-// ---------- Dar ağacı (yalnız uydurma məhkum NPC-lər) ----------
-const gallows = { slots: [], at: 0, open: false };
-const G = CAMPUS.gallows;
-const dummies = []; // slot -> { id, char }
-function nearGallows() {
-  return Math.hypot(player.pos.x - G.x, player.pos.z - (G.z + 3)) < 8;
+// ---------- Dar ağacı və çarmıx (yalnız uydurma məhkum NPC-lər) ----------
+// Hər yer: konfiqurasiya, məhkum yerinin hesablanması, poza, başlıqlar
+const SITES = {
+  gallows: { cfg: CAMPUS.gallows, slotPos: gallowsSlot, emote: 4, front: 3, title: '⚖ Dar ağacı', where: 'dar ağacına', slots: [], dummies: [] },
+  crucifix: { cfg: CAMPUS.crucifix, slotPos: crucifixSlot, emote: 6, front: 2.5, title: '✝ Çarmıx', where: 'çarmıxa', slots: [], dummies: [] },
+};
+for (const k of Object.keys(SITES)) if (!SITES[k].cfg) delete SITES[k];
+const gallows = { at: 0, open: false, site: 'gallows', pendingSite: 'gallows' };
+/** Oyunçu hansı yerin yanındadır ('gallows' | 'crucifix' | null) */
+function nearSite() {
+  let best = null, bd = 8;
+  for (const [k, s] of Object.entries(SITES)) {
+    const d = Math.hypot(player.pos.x - s.cfg.x, player.pos.z - (s.cfg.z + s.front));
+    if (d < bd) { bd = d; best = k; }
+  }
+  return best;
 }
+const nearGallows = () => !!nearSite();
 function slotLeft(s) { return Math.max(0, Math.ceil((s.left - (performance.now() - gallows.at)) / 1000)); }
 
 function syncDummies() {
   if (!world) return;
-  gallows.slots.forEach((s, i) => {
-    const cur = dummies[i];
-    if (cur && (!s || cur.id !== s.id)) { scene.remove(cur.char.root); dummies[i] = null; }
-    if (s && !dummies[i]) {
-      const char = buildCharacter(s.appearance);
-      const p = gallowsSlot(G, i);
-      char.root.position.set(p.x, p.y, p.z);
-      const tag = makeNameTag(s.name, 'məhkum', '#ffcf9a');
-      tag.position.y = char.height + 0.35;
-      char.root.add(tag);
-      scene.add(char.root);
-      dummies[i] = { id: s.id, char };
-    }
-  });
+  for (const site of Object.values(SITES)) {
+    site.slots.forEach((s, i) => {
+      const cur = site.dummies[i];
+      if (cur && (!s || cur.id !== s.id)) { scene.remove(cur.char.root); site.dummies[i] = null; }
+      if (s && !site.dummies[i]) {
+        const char = buildCharacter(s.appearance);
+        const p = site.slotPos(site.cfg, i);
+        char.root.position.set(p.x, p.y, p.z);
+        const tag = makeNameTag(s.name, 'məhkum', '#ffcf9a');
+        tag.position.y = char.height + 0.35;
+        char.root.add(tag);
+        scene.add(char.root);
+        site.dummies[i] = { id: s.id, char };
+      }
+    });
+  }
 }
 function animateDummies(dt) {
-  for (const d of dummies) if (d) animateRig(d.char.rig, dt, 0, { emote: 4, struggle: Math.sin(d.char.rig.t * 0.8) > 0.92 });
+  for (const site of Object.values(SITES)) {
+    for (const d of site.dummies) {
+      if (d) animateRig(d.char.rig, dt, 0, { emote: site.emote, struggle: Math.sin(d.char.rig.t * 0.8) > 0.92 });
+    }
+  }
 }
 
-function openGallowsPanel() {
+function openGallowsPanel(siteKey) {
   if (document.pointerLockElement) document.exitPointerLock();
+  gallows.site = siteKey;
   gallows.open = true;
+  $('gp-title').textContent = SITES[siteKey].title;
   $('gallows-panel').hidden = false;
   renderGallowsSlots();
 }
@@ -408,17 +428,18 @@ function closeGallowsPanel() {
   $('gallows-panel').hidden = true;
 }
 $('gp-close').onclick = closeGallowsPanel;
-$('gp-create').onclick = () => { closeGallowsPanel(); openCreator(false, 'dummy'); };
+$('gp-create').onclick = () => { gallows.pendingSite = gallows.site; closeGallowsPanel(); openCreator(false, 'dummy'); };
 
 function renderGallowsSlots() {
   if (!gallows.open) return;
+  const site = SITES[gallows.site];
   const box = $('gp-slots');
   box.replaceChildren();
-  const taken = gallows.slots.filter(Boolean);
+  const taken = site.slots.filter(Boolean);
   if (!taken.length) {
     const d = document.createElement('div');
     d.className = 'gp-empty';
-    d.textContent = `Hələ məhkum yoxdur (${G.slots} yer).`;
+    d.textContent = `Hələ məhkum yoxdur (${site.cfg.slots} yer).`;
     box.append(d);
   }
   for (const s of taken) {
@@ -442,11 +463,12 @@ function renderGallowsSlots() {
   }
 }
 function updateGallowsUi() {
-  const near = nearGallows();
+  const near = nearSite();
   $('prompt').hidden = !near || gallows.open;
-  if (gallows.open && !near) closeGallowsPanel();
+  if (near) $('prompt').innerHTML = `<b>F</b> ${SITES[near].title.slice(2)}`;
+  if (gallows.open && near !== gallows.site) closeGallowsPanel();
   if (gallows.open) for (const el of document.querySelectorAll('#gp-slots .st')) {
-    const s = gallows.slots.find((x) => x && x.id === el.dataset.slot);
+    const s = SITES[gallows.site].slots.find((x) => x && x.id === el.dataset.slot);
     if (s) el.textContent = `${slotLeft(s)} san`;
   }
 }
@@ -471,7 +493,7 @@ function openCreator(first, mode = 'player') {
 }
 creator.onSave = (a, { mode, name }) => {
   if (mode === 'dummy') {
-    send({ t: 'gallowsDummy', appearance: a, name });
+    send({ t: 'gallowsDummy', appearance: a, name, site: gallows.pendingSite });
     creator.close();
     state.mode = 'game';
     $('hud').hidden = false;
@@ -611,7 +633,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'Escape' && gallows.open) { closeGallowsPanel(); return; }
-  if (e.code === 'KeyF' && (nearGallows() || gallows.open)) { gallows.open ? closeGallowsPanel() : openGallowsPanel(); return; }
+  if (e.code === 'KeyF' && (nearGallows() || gallows.open)) { gallows.open ? closeGallowsPanel() : openGallowsPanel(nearSite()); return; }
   if (e.code === 'KeyF') { if (!e.repeat) interactDown(); return; }
   if (e.code === 'Tab') {
     e.preventDefault();

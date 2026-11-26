@@ -83,6 +83,7 @@
   ],
   "stars": { "count": 18 },
   "gallows": { "x": -92, "z": -140, "platformH": 1.4, "slots": 3, "slotGap": 1.9 },
+  "crucifix": { "x": -105, "z": -140, "slots": 3, "slotGap": 3.4, "footH": 1.0 },
   "npcs": [
     {
       "name": "Rəhman", "x": -86.6, "z": -138.8, "ry": 0.25, "say": "Meydandayıq",

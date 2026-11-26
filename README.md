@@ -94,6 +94,9 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 - Create a fictional "prisoner" NPC in the character creator and pick a name from the preset list
   (`dummyNames` in `options.json`). Real players cannot be placed on the gallows and free-text names are not allowed.
 - 3 slots, each prisoner stays for 2 minutes; any player can release them.
+- Next to it stands the **Çarmıx** (crucifix) with three wooden crosses. It works the same way:
+  press **F** nearby, create a fictional prisoner with a name from the list, and they appear on a
+  cross with arms tied to the beam. Separate 3 slots, same 2-minute timer and release rules.
 
 ### Progression
 - Earn XP by walking around and in combat; level-ups are announced to everyone.
