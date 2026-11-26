@@ -866,31 +866,118 @@ function buildBuilding(scene, bd, R, colliders, blockers) {
   }
 }
 
+/**
+ * "I ❤ BEU" — fotolardakı kimi: qalın, ağ, yumru kənarlı 3D hərflər, qırmızı ürək,
+ * hamısı alçaq daş postament üstündə düz dayanır.
+ */
 function buildLetters(scene, L, colliders) {
-  // "BEU" böyük hərflər + qırmızı ürək (meydandakı foto yeri kimi)
-  const make = (shade) => canvasTex(512, 160, (g, w, h) => {
-    g.clearRect(0, 0, w, h);
-    g.fillStyle = shade ? '#c9c9c9' : '#d62839';
-    g.beginPath();
-    g.moveTo(80, 150); g.bezierCurveTo(10, 100, 20, 20, 80, 50); g.bezierCurveTo(140, 20, 150, 100, 80, 150);
-    g.fill();
-    g.fillStyle = shade ? '#c9c9c9' : '#ffffff';
-    g.font = 'bold 150px system-ui, Arial, sans-serif';
-    g.textBaseline = 'alphabetic';
-    g.fillText(L.text || 'BEU', 160, 150);
-  });
-  const grp = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const t = make(i > 0);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 1.7), new THREE.MeshLambertMaterial({ map: t, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
-    m.position.set(0, 0.85, -i * 0.05);
-    m.castShadow = true;
-    grp.add(m);
+  const H = 1.75;   // hərf hündürlüyü
+  const T = 0.32;   // hərf xəttinin qalınlığı
+  const shapes = [];
+
+  // I
+  const I = new THREE.Shape();
+  roundedRect(I, 0, 0, 0.42, H, 0.08);
+  shapes.push({ shape: I, w: 0.42 });
+
+  // ❤ (ucu aşağıda)
+  const hw = 1.38, hh = 1.5;
+  const heart = new THREE.Shape();
+  heart.moveTo(hw / 2, 0);
+  heart.bezierCurveTo(hw * 0.38, hh * 0.18, 0, hh * 0.42, 0, hh * 0.7);
+  heart.bezierCurveTo(0, hh * 0.92, hw * 0.14, hh, hw * 0.27, hh);
+  heart.bezierCurveTo(hw * 0.4, hh, hw / 2, hh * 0.92, hw / 2, hh * 0.8);
+  heart.bezierCurveTo(hw / 2, hh * 0.92, hw * 0.6, hh, hw * 0.73, hh);
+  heart.bezierCurveTo(hw * 0.86, hh, hw, hh * 0.92, hw, hh * 0.7);
+  heart.bezierCurveTo(hw, hh * 0.42, hw * 0.62, hh * 0.18, hw / 2, 0);
+  shapes.push({ shape: heart, w: hw, red: true });
+
+  // B — iki qövs və iki deşik
+  const r1 = H * 0.25, bx = 0.5;
+  const B = new THREE.Shape();
+  B.moveTo(0, 0);
+  B.lineTo(0, H);
+  B.lineTo(bx, H);
+  B.absarc(bx, H - r1, r1, Math.PI / 2, -Math.PI / 2, true);
+  B.absarc(bx + 0.06, r1, r1, Math.PI / 2, -Math.PI / 2, true);
+  B.lineTo(0, 0);
+  // deşiklər: orta xətt də digər xətlər qədər (T) qalın olsun
+  for (const [yb, yt, cx] of [[H / 2 + T / 2, H - T, 0.44], [T, H / 2 - T / 2, 0.5]]) {
+    const rho = (yt - yb) / 2;
+    const hole = new THREE.Path();
+    hole.moveTo(T, yb);
+    hole.lineTo(cx, yb);
+    hole.absarc(cx, yb + rho, rho, -Math.PI / 2, Math.PI / 2, false);
+    hole.lineTo(T, yt);
+    hole.lineTo(T, yb);
+    B.holes.push(hole);
   }
-  grp.position.set(L.x, 0.05, L.z);
-  grp.rotation.y = L.ry || 0;
+  shapes.push({ shape: B, w: bx + 0.06 + r1 });
+
+  // E
+  const ew = 0.95;
+  const E = new THREE.Shape();
+  [[0, 0], [ew, 0], [ew, T], [T, T], [T, H / 2 - T / 2], [ew * 0.86, H / 2 - T / 2], [ew * 0.86, H / 2 + T / 2],
+    [T, H / 2 + T / 2], [T, H - T], [ew, H - T], [ew, H], [0, H]].forEach(([x, y], i) => (i ? E.lineTo(x, y) : E.moveTo(x, y)));
+  shapes.push({ shape: E, w: ew });
+
+  // U
+  const uw = 1.05, ur = uw / 2;
+  const U = new THREE.Shape();
+  U.moveTo(0, H);
+  U.lineTo(0, ur);
+  U.absarc(ur, ur, ur, Math.PI, 0, false);
+  U.lineTo(uw, H);
+  U.lineTo(uw - T, H);
+  U.lineTo(uw - T, ur);
+  U.absarc(ur, ur, ur - T, 0, Math.PI, true);
+  U.lineTo(T, H);
+  U.lineTo(0, H);
+  shapes.push({ shape: U, w: uw });
+
+  const extrude = { depth: 0.34, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.045, bevelSegments: 3, curveSegments: 14 };
+  const white = new THREE.MeshLambertMaterial({ color: '#f4f4f2' });
+  const red = new THREE.MeshLambertMaterial({ color: '#d0202e' });
+  const gap = 0.14;
+  const total = shapes.reduce((s, o) => s + o.w, 0) + gap * (shapes.length - 1);
+  const grp = new THREE.Group();
+  let x = -total / 2;
+  for (const o of shapes) {
+    const geo = new THREE.ExtrudeGeometry(o.shape, extrude);
+    geo.translate(0, 0, -0.17);
+    const m = new THREE.Mesh(geo, o.red ? red : white);
+    // ürək bir az aşağıda və hərflərdən bir az kiçikdir (fotodakı kimi)
+    m.position.set(x, o.red ? 0.3 : 0.3, 0);
+    m.castShadow = m.receiveShadow = true;
+    grp.add(m);
+    x += o.w + gap;
+  }
+  // alçaq ağ daş postament
+  const base = new THREE.Mesh(new THREE.BoxGeometry(total + 0.8, 0.3, 1.1), new THREE.MeshLambertMaterial({ color: '#e6e3dc' }));
+  base.position.y = 0.15;
+  base.castShadow = base.receiveShadow = true;
+  grp.add(base);
+  grp.position.set(L.x, 0, L.z);
+  grp.rotation.y = L.ry ?? 0;   // -90°: hərflər meydana (-x) baxır, soldan sağa +z boyunca oxunur
   scene.add(grp);
-  colliders.push({ minX: L.x - 0.6, maxX: L.x + 0.6, minZ: L.z - 2.7, maxZ: L.z + 2.7, h: 1.7 });
+  // toqquşma (qrup fırlanmış ola bilər — dünya koordinatında qutu)
+  const halfL = (total + 0.8) / 2, halfD = 0.55;
+  const along = Math.abs(Math.sin(grp.rotation.y)) > 0.5;
+  colliders.push(along
+    ? { minX: L.x - halfD, maxX: L.x + halfD, minZ: L.z - halfL, maxZ: L.z + halfL, h: 2.1 }
+    : { minX: L.x - halfL, maxX: L.x + halfL, minZ: L.z - halfD, maxZ: L.z + halfD, h: 2.1 });
+}
+
+function roundedRect(shape, x, y, w, h, r) {
+  shape.moveTo(x + r, y);
+  shape.lineTo(x + w - r, y);
+  shape.quadraticCurveTo(x + w, y, x + w, y + r);
+  shape.lineTo(x + w, y + h - r);
+  shape.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  shape.lineTo(x + r, y + h);
+  shape.quadraticCurveTo(x, y + h, x, y + h - r);
+  shape.lineTo(x, y + r);
+  shape.quadraticCurveTo(x, y, x + r, y);
 }
 
 // ======================= Kampusdan kənar =======================
