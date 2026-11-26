@@ -578,7 +578,7 @@ export function animateRig(r, dt, speed, opt = {}) {
     legL: 0, legR: 0, kneeL: 0, kneeR: 0,
     armLx: 0.04, armRx: 0.04, armLz: 0.09, armRz: -0.09,
     elbowL: -0.15, elbowR: -0.15, elbowLz: 0, elbowRz: 0,
-    spineX: 0, spineY: 0, spineZ: 0, bodyY: Math.sin(t * 1.8) * 0.004,
+    spineX: 0, spineY: 0, spineZ: 0, bodyY: Math.sin(t * 1.8) * 0.004, bodyRx: 0,
     headX: 0, headY: Math.sin(t * 0.45) * 0.18,
   };
   if (moving) {
@@ -602,6 +602,44 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.armLx = T.armRx = -0.55; T.armLz = 0.12; T.armRz = -0.12; T.elbowL = T.elbowR = -0.75;
     T.spineX = -0.06;
     T.headY = Math.sin(t * 0.35) * 0.35; T.headX = Math.sin(t * 0.23) * 0.08;
+  } else if (emote === 7) {
+    // əl çalmaq
+    const c = Math.sin(t * 16);
+    T.armLx = T.armRx = -1.15;
+    T.armLz = -0.28 - c * 0.18; T.armRz = 0.28 + c * 0.18;
+    T.elbowL = T.elbowR = -0.85;
+    T.headX = -0.05; T.headY = 0;
+  } else if (emote === 8) {
+    // hərbi salam: sağ əl alına
+    T.armRx = -1.25; T.armRz = -0.95; T.elbowR = -2.35; T.elbowRz = 0.2;
+    T.armLx = 0; T.armLz = 0.04; T.elbowL = 0;
+    T.headX = -0.06; T.headY = 0; T.spineX = -0.03;
+  } else if (emote === 9) {
+    // düşünmək: sağ əl çənədə, sol əl qarında
+    T.armRx = -1.05; T.armRz = 0.3; T.elbowR = -2.25;
+    T.armLx = -0.55; T.armLz = -0.45; T.elbowL = -1.35;
+    T.headX = 0.18; T.headY = Math.sin(t * 0.7) * 0.25;
+  } else if (emote === 10) {
+    // gülmək: qarnını tutub sarsılır
+    const sh = Math.sin(t * 20);
+    T.armLx = T.armRx = -0.55; T.armLz = -0.3; T.armRz = 0.3; T.elbowL = T.elbowR = -1.25;
+    T.spineX = 0.22 + sh * 0.05; T.bodyY = Math.abs(sh) * 0.025;
+    T.headX = -0.35 + sh * 0.08; T.headY = 0;
+  } else if (emote === 11) {
+    // üz-əl (facepalm)
+    T.armRx = -1.35; T.armRz = 0.4; T.elbowR = -2.05;
+    T.armLx = 0.05; T.armLz = 0.1; T.elbowL = -0.2;
+    T.headX = 0.38; T.headY = Math.sin(t * 2.2) * 0.12;
+    T.spineX = 0.08;
+  } else if (emote === 12) {
+    // şinav: bədən üzü üstə, qollar yerə dirənir
+    const p = (Math.sin(t * 4) + 1) / 2;
+    T.bodyRx = 1.3 - p * 0.12;
+    T.bodyY = 0.2 + p * 0.1;
+    T.armLx = T.armRx = -1.45; T.armLz = 0.25; T.armRz = -0.25;
+    T.elbowL = T.elbowR = -0.15 - (1 - p) * 0.9;
+    T.legL = T.legR = 0; T.kneeL = T.kneeR = 0;
+    T.headX = -0.4; T.headY = 0;
   } else if (emote === 6) {
     // çarmıxda: qollar yana düz açıq (biləklərdən bağlı), baş bir az aşağı
     T.armLz = 1.52; T.armRz = -1.52; T.armLx = 0; T.armRx = 0;
@@ -669,6 +707,7 @@ export function animateRig(r, dt, speed, opt = {}) {
   L(r.elbowL.rotation, 'z', T.elbowLz); L(r.elbowR.rotation, 'z', T.elbowRz);
   L(r.spine.rotation, 'x', T.spineX); L(r.spine.rotation, 'y', T.spineY); L(r.spine.rotation, 'z', T.spineZ);
   L(r.body.position, 'y', T.bodyY);
+  L(r.body.rotation, 'x', T.bodyRx);
   L(r.head.rotation, 'x', T.headX); L(r.head.rotation, 'y', T.headY);
   // nəfəs
   r.spine.scale.set(1 + Math.sin(t * 1.8) * 0.008, 1, 1 + Math.sin(t * 1.8) * 0.012);

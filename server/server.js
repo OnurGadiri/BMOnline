@@ -146,7 +146,7 @@ function stepAI(e, dt) {
     if (!panic && Math.random() < 0.35) { // bir az dayanır, bəzən əl yelləyir və ya rəqs edir
       ai.wait = 2 + Math.random() * 6;
       const r = Math.random();
-      e.emote = r < 0.2 ? 1 : r < 0.3 ? 2 : r < 0.36 ? 3 : 0;
+      e.emote = r < 0.15 ? 1 : r < 0.22 ? 2 : r < 0.27 ? 3 : r < 0.32 ? 7 : r < 0.37 ? 9 : r < 0.41 ? 10 : 0;
     }
     return;
   }
@@ -713,7 +713,8 @@ wss.on('connection', (ws, req) => {
       e.y = Math.min(10, Math.max(0, y));
       e.ry = ry;
       e.moving = !!m.m;
-      e.emote = [0, 1, 2, 3, 5].includes(m.e) ? m.e : 0; // 5 = oturub
+      // 5 = oturub, 7–12 = yeni emosiyalar (4 və 6 yalnız dar ağacı/çarmıx məhkumları üçündür)
+      e.emote = [0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12].includes(m.e) ? m.e : 0;
       e.w = m.w === 1 ? 1 : 0;
       // Gəzməyə görə XP
       const d = Math.min(3, Math.hypot(e.x - ws.lastPos.x, e.z - ws.lastPos.z));

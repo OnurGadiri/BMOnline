@@ -283,3 +283,17 @@ body.touch .captured, body.touch .death-card { max-width: 90vw; }
 }
 .card input { font-size: 16px; }
 body.in-creator .death, body.in-creator .hurt { display: none !important; }
+
+/* Emosiya paneli (yığılan), kömək sətri, minimal interfeys */
+.emotes { flex-direction: row-reverse; align-items: flex-end; }
+.emote-list { display: none; flex-wrap: wrap; gap: 6px; max-width: 280px; justify-content: flex-end; }
+body.show-emotes .emote-list { display: flex; }
+.emote-list button, .emote-toggle { pointer-events: auto; background: #0007; color: #fff; font-size: 20px; padding: 5px 8px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.emote-list button small, .emote-toggle small { font-size: 10px; opacity: .7; margin-top: 2px; }
+.emote-list button.on { background: #ffd166; color: #1b2838; }
+.help { pointer-events: auto; padding-right: 30px; }
+.help-close { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; color: #fff; padding: 2px 6px; font-size: 13px; opacity: .7; }
+body.hide-help .help { display: none !important; }
+body.minimal-ui .hud-top, body.minimal-ui .minimap, body.minimal-ui #chat:not(.typing), body.minimal-ui .weapon-hud,
+body.minimal-ui .hud-right, body.minimal-ui .help, body.minimal-ui .stick-hint, body.minimal-ui .rotate-hint { display: none !important; }
+body.touch .ttop { flex-wrap: wrap; justify-content: center; max-width: 92vw; }

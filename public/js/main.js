@@ -63,7 +63,7 @@ const player = {
 };
 const MAG = 12;
 const others = new Map(); // id -> { char, tag, target, ry, moving, emote, online, appKey, level, name }
-const cam = { yaw: 0, pitch: 0.3, dist: 6, curDist: 6 };
+const cam = { yaw: 0, pitch: 0.3, dist: 6, curDist: 6, fp: false };
 const keys = new Set();
 Object.assign(window.__bmu, { player, others, cam, renderer, scene, camera });
 
@@ -568,6 +568,7 @@ function setPlayerModel(a) {
   player.gunMesh = null;
   player.char = buildCharacter(a);
   scene.add(player.char.root);
+  player.char.rig.head.visible = !cam.fp;
   if (player.weapon === 1) attachGun(player, true);
 }
 
@@ -645,7 +646,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') { minimap.toggle(); return; }
   if (e.code === 'KeyG') { sfx.init(); setWeapon(player.weapon === 1 ? 0 : 1); return; }
   if (e.code === 'KeyR') { reload(); return; }
-  if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { setEmote(+e.code.slice(5)); return; }
+  if (/^Digit[1-9]$/.test(e.code)) { const em = EMOTES[+e.code.slice(5) - 1]; if (em) setEmote(em.id); return; }
+  if (e.code === 'KeyV') { toggleFirstPerson(); return; }
+  if (e.code === 'KeyH') { setHelpHidden(!settings.hideHelp); return; }
+  if (e.code === 'KeyU') { setMinimal(!document.body.classList.contains('minimal-ui')); return; }
   if (e.code === 'Space') e.preventDefault();
   keys.add(e.code);
 });
@@ -656,10 +660,63 @@ window.addEventListener('keyup', (e) => {
 });
 window.addEventListener('blur', () => keys.clear());
 
+// Emosiyalar: düymə 1–9 (id serverə gedir; 4/5/6 oturma və məhkum pozaları üçün ayrılıb)
+const EMOTES = [
+  { id: 1, icon: '👋', name: 'Salam' }, { id: 2, icon: '💃', name: 'Rəqs' }, { id: 3, icon: '🙌', name: 'Sevinc' },
+  { id: 7, icon: '👏', name: 'Əl çal' }, { id: 8, icon: '🫡', name: 'Hərbi salam' }, { id: 9, icon: '🤔', name: 'Düşün' },
+  { id: 10, icon: '😂', name: 'Gül' }, { id: 11, icon: '🤦', name: 'Üz-əl' }, { id: 12, icon: '💪', name: 'Şinav' },
+];
 function setEmote(n) {
+  if (player.sitting || player.dead) return;
   player.emote = player.emote === n ? 0 : n;
+  if (player.emote && player.weapon) setWeapon(0);
+  updateEmoteBar();
 }
-document.querySelectorAll('.emotes button').forEach((b) => { b.onclick = () => setEmote(+b.dataset.emote); });
+{
+  const list = $('emote-list');
+  EMOTES.forEach((em, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.title = `${em.name} (${i + 1})`;
+    b.dataset.emote = em.id;
+    b.innerHTML = `<span></span><small></small>`;
+    b.firstChild.textContent = em.icon;
+    b.lastChild.textContent = String(i + 1);
+    b.onclick = () => setEmote(em.id);
+    list.append(b);
+  });
+  $('emote-toggle').onclick = () => document.body.classList.toggle('show-emotes');
+}
+function updateEmoteBar() {
+  for (const b of $('emote-list').children) b.classList.toggle('on', +b.dataset.emote === player.emote);
+}
+
+// Kömək sətri və minimal interfeys (seçim yadda qalır)
+function setHelpHidden(h) {
+  settings.hideHelp = h;
+  saveSettings();
+  document.body.classList.toggle('hide-help', h);
+  $('set-help').checked = !h;
+}
+function setMinimal(on) {
+  settings.minimal = on;
+  saveSettings();
+  document.body.classList.toggle('minimal-ui', on);
+  $('set-minimal').checked = on;
+}
+$('help-close').onclick = () => setHelpHidden(true);
+$('set-help').onchange = (e) => setHelpHidden(!e.target.checked);
+$('set-minimal').onchange = (e) => setMinimal(e.target.checked);
+setHelpHidden(!!settings.hideHelp);
+setMinimal(!!settings.minimal);
+
+// Birinci şəxs görünüşü
+function toggleFirstPerson(on = !cam.fp) {
+  cam.fp = on;
+  if (player.char) player.char.rig.head.visible = !on;
+  document.body.classList.toggle('fp', on);
+  toast(on ? '👁 Birinci şəxs (V — geri)' : '🎥 Üçüncü şəxs');
+}
 
 // ---------- İdarəetmə: siçan / kamera ----------
 // 1) Siçanı basıb sürüşdürmək həmişə işləyir (sol və ya sağ düymə)
@@ -669,7 +726,7 @@ function rotateCamera(dx, dy) {
   const s = 0.0028 * settings.sens;
   cam.yaw -= dx * s;
   cam.pitch += (settings.invert ? -dy : dy) * s;
-  cam.pitch = Math.min(1.25, Math.max(-0.35, cam.pitch));
+  cam.pitch = cam.fp ? Math.min(1.35, Math.max(-1.3, cam.pitch)) : Math.min(1.25, Math.max(-0.35, cam.pitch));
   $('look-hint').classList.add('gone');
 }
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -726,7 +783,11 @@ document.addEventListener('pointerlockerror', () => {
   toast('Brauzer siçan kilidinə icazə vermədi — klik atəş açır, sürüşdürmək kameranı çevirir.');
 });
 canvas.addEventListener('wheel', (e) => {
-  if (state.mode === 'game') cam.dist = Math.min(14, Math.max(2.2, cam.dist + Math.sign(e.deltaY) * 0.7));
+  if (state.mode !== 'game') return;
+  // tam yaxınlaşanda birinci şəxsə keçir, geri fırladanda üçüncü şəxsə qayıdır
+  if (e.deltaY < 0 && cam.dist <= 2.2 && !cam.fp) { toggleFirstPerson(true); return; }
+  if (e.deltaY > 0 && cam.fp) { toggleFirstPerson(false); cam.dist = 2.2; return; }
+  cam.dist = Math.min(14, Math.max(2.2, cam.dist + Math.sign(e.deltaY) * 0.7));
 }, { passive: true });
 
 // ---------- HUD ----------
@@ -837,7 +898,7 @@ function updatePlayer(dt) {
     player.pos.x += player.dirX * sp * dt;
     player.pos.z += player.dirZ * sp * dt;
   }
-  const aiming = player.weapon === 1;
+  const aiming = player.weapon === 1 || cam.fp; // birinci şəxsdə də bədən baxış tərəfinə dönür
   if (aiming) player.ry = angleLerp(player.ry, cam.yaw + Math.PI, Math.min(1, dt * 20)); // tapança ilə həmişə nişana baxır
   else if (mx || mz) player.ry = angleLerp(player.ry, Math.atan2(mx, mz), Math.min(1, dt * 12));
   if (player.punchT > 0) { player.punchT += dt / 0.32; if (player.punchT >= 1) player.punchT = 0; }
@@ -978,7 +1039,24 @@ function bigBanner(text) {
 }
 
 const aimOffset = new THREE.Vector3();
+const eyePos = new THREE.Vector3();
 function updateCamera(dt) {
+  // Birinci şəxs: kamera başın içində, baxış istiqaməti kameranın yaw/pitch-i ilə
+  if (cam.fp && !player.dead && player.char) {
+    player.char.root.updateMatrixWorld(true);
+    player.char.rig.head.getWorldPosition(eyePos);
+    eyePos.y += 0.2 * (state.appearance?.height || 1);
+    const cp = Math.cos(cam.pitch);
+    camera.position.copy(eyePos);
+    camera.lookAt(eyePos.x - Math.sin(cam.yaw) * cp, eyePos.y - Math.sin(cam.pitch), eyePos.z - Math.cos(cam.yaw) * cp);
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+    cam.curDist = 0.5;
+    sun.position.copy(player.pos).addScaledVector(SUN_DIR, 120);
+    sun.target.position.copy(player.pos);
+    return;
+  }
+  if (!cam.fp) cam.pitch = Math.min(1.25, Math.max(-0.35, cam.pitch));
   // Tapança ilə: kamera sağ çiyin arxasına yaxınlaşır
   const aiming = player.weapon === 1 && !player.dead;
   const k = Math.min(1, dt * 8);
@@ -1033,6 +1111,7 @@ window.__bmu.step = (dt = 1 / 60, n = 1) => { for (let i = 0; i < n; i++) { cloc
 
 function frame(dt) {
   document.body.classList.toggle('in-creator', state.mode === 'creator');
+  if (player.emote !== frame.lastEmote) { frame.lastEmote = player.emote; updateEmoteBar(); }
   if (state.mode === 'creator') {
     creator.render(renderer, dt);
     return;
