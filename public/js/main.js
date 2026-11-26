@@ -800,7 +800,12 @@ function updateOthers(dt) {
 
 function loop() {
   requestAnimationFrame(loop);
-  const dt = Math.min(0.05, clock.getDelta());
+  frame(Math.min(0.05, clock.getDelta()));
+}
+// Sazlama/test üçün: oyun dövrünü əl ilə irəli aparmaq (məs. __bmu.step(1/60, 120))
+window.__bmu.step = (dt = 1 / 60, n = 1) => { for (let i = 0; i < n; i++) { clock.elapsedTime += dt; frame(dt); } };
+
+function frame(dt) {
   if (state.mode === 'creator') {
     creator.render(renderer, dt);
     return;
