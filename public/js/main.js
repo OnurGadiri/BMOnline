@@ -6,6 +6,7 @@ import { Creator } from './creator.js';
 import { SUN_DIR } from './decor.js';
 import { makeSpeechBubble, makePistol } from './character.js';
 import { Fx, sfx, makeHpBar, aimPoint } from './combat.js';
+import { Minimap } from './minimap.js';
 
 const $ = (id) => document.getElementById(id);
 const [OPTIONS, CAMPUS] = await Promise.all([
@@ -13,6 +14,7 @@ const [OPTIONS, CAMPUS] = await Promise.all([
   fetch('/data/campus.json').then((r) => r.json()),
 ]);
 setCharacterDefaults(OPTIONS.default);
+const minimap = new Minimap(CAMPUS, document.getElementById('minimap'));
 
 // ---------- Renderer ----------
 const canvas = $('view');
@@ -561,6 +563,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF' && (nearGallows() || gallows.open)) { gallows.open ? closeGallowsPanel() : openGallowsPanel(); return; }
   if (e.code === 'KeyC') { openCreator(false); return; }
   if (e.code === 'KeyP') { togglePhotoMode(); return; }
+  if (e.code === 'KeyM') { minimap.toggle(); return; }
   if (e.code === 'KeyG') { sfx.init(); setWeapon(player.weapon === 1 ? 0 : 1); return; }
   if (e.code === 'KeyR') { reload(); return; }
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { setEmote(+e.code.slice(5)); return; }
@@ -823,6 +826,7 @@ function frame(dt) {
   updateCamera(dt);
   world.update(clock.elapsedTime, dt, camera);
   fx.update(dt);
+  if (!document.body.classList.contains('photo')) minimap.draw(player.pos, player.ry, cam.yaw, others);
   // zərər effekti və isabət işarəsi
   hurtT = Math.max(0, hurtT - dt * 1.6);
   $('hurt').style.opacity = Math.max(hurtT, player.dead ? 0.55 : player.hp < 30 ? 0.25 + Math.sin(clock.elapsedTime * 5) * 0.08 : 0);

@@ -104,11 +104,26 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 | `1` `2` `3` | Emotes: wave, dance, cheer |
 | `F` | Use the gallows (when nearby) |
 | `C` | Open the character creator |
+| `M` | Toggle the full campus map (a minimap is always shown) |
 | `P` | Photo mode (hides the UI for screenshots) |
 | `Enter` | Chat |
 | `Esc` | Release the mouse / close panels |
 
 The ⚙ **Settings** panel has mouse sensitivity, invert Y, mouse-lock mode and graphics quality (High / Low).
+
+## Tests
+
+```bash
+npm test          # map validation + server protocol tests
+npm run test:map  # only the campus.json checks
+```
+
+- `tests/map.test.js` checks NPC routes and roads against buildings, graph connectivity,
+  objects placed on roads or inside buildings, and overlapping areas.
+- `tests/protocol.test.js` starts its own server on port 3101 with a temporary data folder
+  (your `data/players.json` is never touched) and runs 35 multiplayer checks: login and
+  character validation, sync, chat, teleport guard, shooting, ammo, death and respawn,
+  punching, the gallows, brute-force protection and session takeover.
 
 ## Project structure
 
@@ -122,6 +137,9 @@ public/js/creator.js      Character creator UI and preview stage
 public/js/world.js        Campus: buildings, paths, plaza, football pitch, gallows, collisions
 public/js/decor.js        Sky, clouds, grass, hedges, flowers, street lamps, rocks
 public/js/combat.js       Combat effects, sounds, health bars, aim raycasting
+public/js/minimap.js      Minimap and full campus map
+public/js/merge.js        Merges static meshes into vertex-coloured batches (fewer draw calls)
+tests/                    Map validation and server protocol tests
 public/data/campus.json   Map data: buildings, paths / NPC navigation graph, spawn, static NPCs
 public/data/options.json  Character options, colour palettes, presets, prisoner names
 start.bat                 One-click launcher for Windows

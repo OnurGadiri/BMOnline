@@ -98,7 +98,7 @@ button.mini { padding: 5px 10px; font-size: 12px; background: rgba(255,255,255,.
 #hud-xp { height: 100%; width: 0; background: linear-gradient(90deg, #2a9d8f, #8ae6a2); transition: width .3s; }
 #hud-xp-text { position: absolute; inset: 0; font-size: 10px; text-align: center; line-height: 14px; }
 #hud-online { font-size: 13px; margin-top: 8px; opacity: .85; }
-.hud-right { position: absolute; right: 16px; top: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.hud-right { position: absolute; right: 16px; top: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 7; }
 .hud-right button { pointer-events: auto; }
 .settings { pointer-events: auto; background: #000a; padding: 12px 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; width: 250px; }
 .settings label { display: flex; flex-direction: column; gap: 4px; }
@@ -160,7 +160,13 @@ body.aiming .crosshair::before { content: ''; position: absolute; inset: 0; bord
 .gp-row button { padding: 5px 10px; font-size: 12.5px; }
 .gp-row button.free { background: #8ae6a2; }
 .gp-empty { font-size: 13px; opacity: .55; padding: 4px; }
-.help { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; background: #0006; padding: 6px 12px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
+.help { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; background: #0006; padding: 5px 12px; border-radius: 10px;
+  font-size: 12px; text-align: center; line-height: 1.55; width: max-content; max-width: min(760px, calc(100vw - 32px)); }
+@media (max-width: 900px) { .help { font-size: 11px; } }
+.minimap { position: absolute; right: 16px; top: 108px; width: 160px; height: 160px; border-radius: 50%;
+  border: 3px solid #ffffffb0; box-shadow: 0 6px 20px #0007; background: #3d5f34; }
+.minimap.big { right: 50%; top: 50%; transform: translate(50%, -50%); width: min(62vh, 92vw); height: min(88vh, 92vw * 1.7);
+  border-radius: 16px; z-index: 6; }
 #chat { position: absolute; left: 16px; bottom: 50px; width: min(420px, 60vw); }
 #chat-log { max-height: 180px; overflow-y: auto; font-size: 14px; text-shadow: 0 1px 2px #000; display: flex; flex-direction: column; gap: 2px; }
 #chat-log .sys { color: #ffd166; font-style: italic; }
