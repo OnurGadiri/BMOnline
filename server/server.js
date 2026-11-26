@@ -308,6 +308,105 @@ function respawn(e) {
   broadcast({ t: 'hp', id: e.key, hp: 100 });
 }
 
+// ---------- Toplar (futbol, basketbol) — server fizikası ----------
+const BALL_G = 12;
+const balls = (CAMPUS.balls || []).map((b) => ({ ...b, px: b.x, py: b.r, pz: b.z, vx: 0, vy: 0, vz: 0, lastKick: null, resetAt: 0, dirty: true }));
+const ballState = () => ({ t: 'balls', b: balls.map((b) => [b.id, ...[b.px, b.py, b.pz, b.vx, b.vy, b.vz].map((v) => +v.toFixed(3))]) });
+
+function stepBall(b, dt) {
+  const prev = { x: b.px, y: b.py, z: b.pz };
+  // sabit cazibə üçün dəqiq inteqrasiya: mövqe orta sürətlə dəyişir
+  const vy0 = b.vy;
+  b.vy -= BALL_G * dt;
+  b.px += b.vx * dt; b.py += ((vy0 + b.vy) / 2) * dt; b.pz += b.vz * dt;
+  const bounce = b.kind === 'basketball' ? 0.72 : 0.55;
+  if (b.py < b.r) {
+    b.py = b.r;
+    if (b.vy < 0) b.vy = -b.vy * bounce;
+    if (b.vy < 0.8) b.vy = 0;
+    const f = Math.max(0, 1 - (b.kind === 'basketball' ? 1.6 : 1.1) * dt);
+    b.vx *= f; b.vz *= f;
+  }
+  // qol: top qapının ağzından xətti keçir
+  for (const g of b.goals || []) {
+    const crossed = (prev.z - g.z) * (b.pz - g.z) < 0;
+    if (crossed && Math.abs(b.px - g.x) < g.half - b.r && b.py < g.h && !b.resetAt) score(b, 'goal');
+  }
+  // səbət: top halqanın içindən aşağı düşür
+  const h = b.hoop;
+  if (h && prev.y > h.y && b.py <= h.y && !b.resetAt) {
+    // halqa müstəvisini keçdiyi dəqiq nöqtə (sürətli top bir addımda halqanı "atlamasın")
+    const k = (prev.y - h.y) / (prev.y - b.py);
+    const cx = prev.x + (b.px - prev.x) * k, cz = prev.z + (b.pz - prev.z) * k;
+    if (Math.hypot(cx - h.x, cz - h.z) < h.r) score(b, 'basket');
+  }
+  // divarlar / torlar
+  const bd = b.bounds;
+  if (b.px < bd.minX + b.r) { b.px = bd.minX + b.r; b.vx = Math.abs(b.vx) * 0.5; }
+  if (b.px > bd.maxX - b.r) { b.px = bd.maxX - b.r; b.vx = -Math.abs(b.vx) * 0.5; }
+  if (b.pz < bd.minZ + b.r) { b.pz = bd.minZ + b.r; b.vz = Math.abs(b.vz) * 0.5; }
+  if (b.pz > bd.maxZ - b.r) { b.pz = bd.maxZ - b.r; b.vz = -Math.abs(b.vz) * 0.5; }
+  if (b.py <= b.r && Math.hypot(b.vx, b.vz) < 0.05) { b.vx = 0; b.vz = 0; }
+  if (b.vx || b.vy || b.vz) b.dirty = true;
+}
+
+function score(b, kind) {
+  b.resetAt = Date.now() + (kind === 'goal' ? 2500 : 0);
+  const who = b.lastKick && db.accounts[b.lastKick];
+  const name = who ? who.name : 'Kimsə';
+  if (kind === 'goal') {
+    broadcast({ t: 'score', kind, by: name, ball: b.id });
+    broadcast({ t: 'sys', msg: `⚽ QOOOL! ${name} topu qapıya göndərdi! (+15 XP)` });
+    if (who) { who.goals = (who.goals || 0) + 1; addXp(b.lastKick, 15); }
+  } else {
+    broadcast({ t: 'score', kind, by: name, ball: b.id });
+    broadcast({ t: 'sys', msg: `🏀 ${name} səbətə saldı! (+10 XP)` });
+    if (who) { who.baskets = (who.baskets || 0) + 1; addXp(b.lastKick, 10); }
+    b.resetAt = 0;
+  }
+}
+
+setInterval(() => {
+  const dt = 1 / 30, now = Date.now();
+  for (const b of balls) {
+    if (b.resetAt && now > b.resetAt) {
+      Object.assign(b, { px: b.x, py: b.r + 0.5, pz: b.z, vx: 0, vy: 0, vz: 0, resetAt: 0, dirty: true });
+    }
+    // futbol: üstündən qaçan oyunçu topu qabağına itələyir (dribl)
+    if (b.kind === 'football' && b.py < 0.7) {
+      for (const e of entities.values()) {
+        if (!e.online || e.dead || !e.moving) continue;
+        const dx = b.px - e.x, dz = b.pz - e.z, d = Math.hypot(dx, dz);
+        if (d < 0.75 && d > 0.01) {
+          const sp = Math.hypot(b.vx, b.vz);
+          if (sp < 5.5) { b.vx += (dx / d) * 3.2; b.vz += (dz / d) * 3.2; b.lastKick = e.key; }
+        }
+      }
+    }
+    stepBall(b, dt);
+  }
+}, 1000 / 30);
+
+// ---------- Ulduzlar (toplanan bonuslar) ----------
+const stars = new Map();
+let starSeq = 0;
+function spawnStar() {
+  for (let i = 0; i < 80; i++) {
+    const [a, c] = CAMPUS.edges[Math.floor(Math.random() * CAMPUS.edges.length)];
+    const [x1, z1] = nodes[a], [x2, z2] = nodes[c];
+    const t = Math.random(), len = Math.hypot(x2 - x1, z2 - z1) || 1;
+    const off = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 10);
+    const x = x1 + (x2 - x1) * t + ((z2 - z1) / len) * off, z = z1 + (z2 - z1) * t - ((x2 - x1) / len) * off;
+    if (!validPos(x, z)) continue;
+    const id = `s${++starSeq}`;
+    const s = { id, x: +x.toFixed(2), z: +z.toFixed(2) };
+    stars.set(id, s);
+    return s;
+  }
+  return null;
+}
+for (let i = 0; i < (CAMPUS.stars?.count || 0); i++) spawnStar();
+
 /** Oyunçu çıxdı: xarakteri oflayn NPC-yə çevrilir və kampusda gəzməyə davam edir */
 function goOffline(key) {
   const e = entities.get(key);
@@ -441,6 +540,8 @@ wss.on('connection', (ws, req) => {
       broadcast({ t: 'entity', e: publicEntity(e) }, ws);
       broadcast({ t: 'sys', msg: `${acc.name} kampusa gəldi.` }, ws);
       send(ws, gallowsState());
+      send(ws, ballState());
+      send(ws, { t: 'stars', s: [...stars.values()] });
       send(ws, { t: 'ammo', ammo: ws.ammo });
       if (e.dead) send(ws, { t: 'dead', id: e.key, by: '', weapon: '', respawn: Math.max(0, e.respawnAt - Date.now()) });
       return;
@@ -499,6 +600,51 @@ wss.on('connection', (ws, req) => {
         if (r) send(ws, { t: 'hit', id: best.key, dmg: W.fist.dmg, head: false, kill: r.kill, at: [best.x, best.y + 1.4, best.z] });
       }
       return;
+    }
+
+    if (m.t === 'kick' && ws.inGame) {
+      const e = entities.get(ws.key);
+      const b = balls.find((x) => x.id === m.id);
+      const now = Date.now();
+      if (!e || e.dead || !b || b.resetAt || now - (ws.lastKick || 0) < 350) return;
+      if (Math.hypot(b.px - e.x, b.pz - e.z) > 2.3 || Math.abs(b.py - (e.y + 0.9)) > 2.4) return;
+      let v = vec3(m.v);
+      if (!v) return;
+      const sp = Math.hypot(...v), max = b.kind === 'basketball' ? 20 : 24;
+      if (sp > max) v = v.map((c) => (c * max) / sp);
+      ws.lastKick = now;
+      [b.vx, b.vy, b.vz] = v;
+      if (b.py < b.r + 0.05) b.py = b.r + 0.05;
+      b.lastKick = e.key;
+      e.emote = 0;
+      broadcast(ballState());
+      broadcast({ t: 'kickFx', id: e.key, ball: b.id }, ws);
+      return;
+    }
+
+    if (m.t === 'collect' && ws.inGame) {
+      const e = entities.get(ws.key);
+      const s = stars.get(String(m.id || ''));
+      if (!e || e.dead || !s || Math.hypot(s.x - e.x, s.z - e.z) > 2.6) return;
+      stars.delete(s.id);
+      acc.stars = (acc.stars || 0) + 1;
+      broadcast({ t: 'starGone', id: s.id, by: acc.name });
+      addXp(ws.key, 5);
+      setTimeout(() => { const n = spawnStar(); if (n) broadcast({ t: 'star', s: n }); }, 45_000);
+      return;
+    }
+
+    if (m.t === 'board' && ws.inGame) {
+      const now = Date.now();
+      if (now - (ws.lastBoard || 0) < 800) return;
+      ws.lastBoard = now;
+      const rows = Object.entries(db.accounts)
+        .filter(([, a]) => a.appearance)
+        .map(([k, a]) => ({ name: a.name, level: a.level, xp: a.xp, kills: a.kills || 0, deaths: a.deaths || 0, stars: a.stars || 0,
+          goals: (a.goals || 0) + (a.baskets || 0), online: !!entities.get(k)?.online, me: k === ws.key }))
+        .sort((p, q) => q.level - p.level || q.xp - p.xp)
+        .slice(0, 12);
+      return send(ws, { t: 'board', rows });
     }
 
     if (m.t === 'reload' && ws.inGame) {
@@ -563,7 +709,7 @@ wss.on('connection', (ws, req) => {
       e.y = Math.min(10, Math.max(0, y));
       e.ry = ry;
       e.moving = !!m.m;
-      e.emote = [0, 1, 2, 3].includes(m.e) ? m.e : 0;
+      e.emote = [0, 1, 2, 3, 5].includes(m.e) ? m.e : 0; // 5 = oturub
       e.w = m.w === 1 ? 1 : 0;
       // Gəzməyə görə XP
       const d = Math.min(3, Math.hypot(e.x - ws.lastPos.x, e.z - ws.lastPos.z));
@@ -628,6 +774,11 @@ setInterval(() => {
       e.w || 0, e.dead ? 1 : 0]);
   }
   broadcast({ t: 'snap', e: snap });
+  // toplar hərəkətdədirsə və ya saniyədə bir — vəziyyəti göndər
+  if (balls.some((b) => b.dirty) || tick % 10 === 0) {
+    broadcast(ballState());
+    for (const b of balls) b.dirty = false;
+  }
   // NPC mövqelərini arabir yadda saxla
   if (++tick % 100 === 0) {
     for (const e of entities.values()) if (!e.online) db.accounts[e.key].pos = { x: e.x, z: e.z, ry: e.ry };

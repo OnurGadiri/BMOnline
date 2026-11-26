@@ -202,6 +202,43 @@ async function enter(name, pin = '1234') {
   A.c.send({ t: 'gallowsRemove', id });
   ok('məhkum azad edilir', !!(await gl2));
 
+  // --- 8b. İnteraksiyalar: cədvəl, ulduz, basketbol, oturmaq ---
+  A.c.send({ t: 'board' });
+  const board = await A.c.waitT('board', 1500);
+  ok('liderlər cədvəli gəlir', !!board && board.rows.some((r) => r.name === 'Alfa' && r.me), board && board.rows.map((r) => r.name).join(','));
+  const starsMsg = A.c.msgs.find((m) => m.t === 'stars');
+  ok('ulduzlar oyuna girəndə göndərilir', !!starsMsg && starsMsg.s.length > 0, String(starsMsg?.s.length));
+  const farStar = starsMsg.s.map((s) => ({ s, d: Math.hypot(s.x - A.c.pos.x, s.z - A.c.pos.z) })).sort((p, q) => q.d - p.d)[0];
+  A.c.send({ t: 'collect', id: farStar.s.id });
+  ok('uzaqdakı ulduzu götürmək olmur', !(await A.c.waitT('starGone', 600)), `${farStar.d.toFixed(0)} m`);
+  const near = starsMsg.s.map((s) => ({ s, d: Math.hypot(s.x - A.c.pos.x, s.z - A.c.pos.z) })).sort((p, q) => p.d - q.d)[0];
+  A.c.pos = await A.c.walkTo(A.c.pos, { x: near.s.x, z: near.s.z }, 8.5);
+  const gone = A.c.waitT('starGone', 1500, (m) => m.id === near.s.id);
+  const starXp = A.c.waitT('xp', 1500);
+  A.c.send({ t: 'collect', id: near.s.id });
+  ok('yaxındakı ulduz toplanır', (await gone)?.by === 'Alfa');
+  ok('ulduz XP verir', !!(await starXp));
+  // basketbol meydançasına get və topu at
+  const ballsMsg = A.c.msgs.filter((m) => m.t === 'balls').pop();
+  const bRow = ballsMsg.b.find((r) => r[0] === 'basket');
+  A.c.pos = await A.c.walkTo(A.c.pos, { x: bRow[1] - 0.8, z: bRow[3] }, 8.5);
+  await sleep(150);
+  const moved = A.c.waitT('balls', 1500, (m) => { const r = m.b.find((x) => x[0] === 'basket'); return r && Math.hypot(r[4], r[5], r[6]) > 1; });
+  A.c.send({ t: 'kick', id: 'basket', v: [-0.5, 8, 2] });
+  ok('topa vurmaq işləyir', !!(await moved));
+  const bTooFast = A.c.waitT('balls', 1200, (m) => { const r = m.b.find((x) => x[0] === 'basket'); return r && Math.hypot(r[4], r[5], r[6]) > 20.5; });
+  await sleep(400);
+  A.c.send({ t: 'kick', id: 'basket', v: [0, 100, 0] });
+  ok('topun sürəti məhdudlaşdırılır (hiylə qorunması)', !(await bTooFast));
+  // uzaqdakı futbol topuna vurmaq olmur
+  const fb = A.c.waitT('balls', 800, (m) => { const r = m.b.find((x) => x[0] === 'football'); return r && Math.hypot(r[4], r[6]) > 1; });
+  A.c.send({ t: 'kick', id: 'football', v: [10, 2, 0] });
+  ok('uzaqdakı topa vurmaq olmur', !(await fb));
+  // oturma emosiyası (5) qəbul olunur
+  A.c.send({ t: 'pos', x: A.c.pos.x, y: 0, z: A.c.pos.z, ry: 0, m: 0, e: 5, w: 0 });
+  const sitSnap = await B.c.waitT('snap', 1500, (m) => m.e.some((r) => r[0] === 'alfa' && r[6] === 5));
+  ok('oturmaq digərlərinə görünür', !!sitSnap);
+
   // --- 9. Eyni hesabla ikinci giriş, çıxış → NPC ---
   const kicked = B.c.waitT('kicked', 3000);
   const offline = A.c.waitT('entity', 6000, (m) => m.e.id === 'beta' && m.e.online === false);

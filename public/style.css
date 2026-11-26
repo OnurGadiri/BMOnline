@@ -113,6 +113,24 @@ body.dragging-cam #view { cursor: grabbing; }
 .settings select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; background: #1b2838; color: #fff; border: 1px solid #ffffff30; }
 body.photo #hud > *:not(#toast) { display: none !important; }
 
+/* İnteraksiyalar */
+.prompt.iprompt { top: 68%; }
+.charge { position: absolute; left: 50%; top: 74%; transform: translateX(-50%); width: 220px; height: 14px; background: #0009; border-radius: 7px; overflow: hidden; border: 2px solid #ffffff60; }
+#charge-fill { height: 100%; width: 0; background: linear-gradient(90deg, #8ae6a2, #ffd166, #ff6b6b); }
+.charge .ideal { display: none; position: absolute; left: calc(50% - 2px); top: -2px; bottom: -2px; width: 4px; background: #fff; box-shadow: 0 0 6px #fff; }
+.charge.basket .ideal { display: block; }
+.banner { position: fixed; left: 50%; top: 24%; transform: translateX(-50%); z-index: 8; font-size: 44px; font-weight: 900; color: #ffd166;
+  text-shadow: 0 4px 0 #8a5a00, 0 8px 24px #000a; white-space: nowrap; pointer-events: none; }
+.banner.pop { animation: pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes pop { from { transform: translateX(-50%) scale(.3); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+.board { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 9; background: #101a26ee; border: 1px solid #ffffff25;
+  border-radius: 16px; padding: 14px 18px; min-width: 420px; box-shadow: 0 20px 50px #000a; pointer-events: none; }
+.board-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+.board table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.board th { text-align: left; opacity: .6; font-weight: 600; padding: 4px 6px; }
+.board td { padding: 5px 6px; border-top: 1px solid #ffffff12; }
+.board tr.me td { color: #ffd166; font-weight: 700; }
+
 /* Döyüş */
 .hpbar { position: relative; height: 16px; background: #ffffff25; border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
 #hud-hp { height: 100%; width: 100%; background: linear-gradient(90deg, #e63946, #ff6b6b); transition: width .2s, background .2s; }

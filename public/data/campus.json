@@ -69,6 +69,19 @@
   "highway": { "z": -305, "minX": -500, "maxX": 450, "w": 18 },
   "gate": { "x": 0, "z": -286 },
 
+  "balls": [
+    {
+      "id": "football", "kind": "football", "x": 48, "z": 30, "r": 0.22,
+      "bounds": { "minX": 27.4, "maxX": 68.6, "minZ": -2.6, "maxZ": 62.6 },
+      "goals": [{ "x": 48, "z": 1, "half": 3.6, "h": 2.4 }, { "x": 48, "z": 59, "half": 3.6, "h": 2.4 }]
+    },
+    {
+      "id": "basket", "kind": "basketball", "x": 72, "z": -236, "r": 0.12,
+      "bounds": { "minX": 62.3, "maxX": 85.7, "minZ": -252, "maxZ": -228.5 },
+      "hoop": { "x": 69, "y": 3.05, "z": -228.62, "r": 0.23 }
+    }
+  ],
+  "stars": { "count": 18 },
   "gallows": { "x": -92, "z": -140, "platformH": 1.4, "slots": 3, "slotGap": 1.9 },
   "npcs": [
     {

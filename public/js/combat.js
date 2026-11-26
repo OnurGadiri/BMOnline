@@ -71,6 +71,24 @@ class Sfx {
     if (!this.ctx) return;
     this.tone(0.3, 2400, 2000, 0.03, 'square');
   }
+  kick(vol = 1) {
+    if (!this.ctx || vol <= 0.01) return;
+    this.tone(0.9 * vol, 180, 70, 0.09, 'sine');
+    this.noiseBurst(0.3 * vol, 1500, 0.05);
+  }
+  bounce(vol = 1) {
+    if (!this.ctx || vol <= 0.02) return;
+    this.tone(0.4 * vol, 140, 90, 0.06, 'sine');
+  }
+  chime() {
+    if (!this.ctx) return;
+    [880, 1175, 1568].forEach((f, i) => setTimeout(() => this.tone(0.25, f, f * 1.01, 0.18, 'triangle'), i * 70));
+  }
+  cheer() {
+    if (!this.ctx) return;
+    [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.tone(0.3, f, f, 0.22, 'square'), i * 110));
+    this.noiseBurst(0.25, 2500, 1.2, 'bandpass');
+  }
   reload() {
     if (!this.ctx) return;
     this.tone(0.3, 900, 700, 0.04, 'square');

@@ -7,6 +7,7 @@ import { SUN_DIR } from './decor.js';
 import { makeSpeechBubble, makePistol } from './character.js';
 import { Fx, sfx, makeHpBar, aimPoint } from './combat.js';
 import { Minimap } from './minimap.js';
+import { Play, BALL_G } from './play.js';
 
 const $ = (id) => document.getElementById(id);
 const [OPTIONS, CAMPUS] = await Promise.all([
@@ -42,6 +43,7 @@ sun.castShadow = true;
 const SHADOW = { high: [4096, 60], low: [1024, 40] };
 scene.add(sun, sun.target);
 let world = null;
+let play = null; // toplar, ulduzlar
 const fx = new Fx(scene);
 
 // ---------- Vəziyyət ----------
@@ -167,6 +169,32 @@ function handle(m) {
         if (o) { o.hp = m.hp; o.hpBar?.userData.set(m.hp); }
       }
       break;
+    // ---- interaksiyalar ----
+    case 'balls':
+      play?.setBalls(m.b);
+      break;
+    case 'kickFx': {
+      const o = others.get(m.id);
+      if (o) { o.punchT = 0.001; sfx.kick(volumeAt(o.char.root.position)); }
+      break;
+    }
+    case 'score':
+      sfx.cheer();
+      bigBanner(m.kind === 'goal' ? `⚽ QOOOL! — ${m.by}` : `🏀 SƏBƏT! — ${m.by}`);
+      break;
+    case 'stars':
+      play?.setStars(m.s);
+      break;
+    case 'star':
+      play?.addStar(m.s);
+      break;
+    case 'starGone':
+      play?.removeStar(m.id);
+      if (m.by === state.name) { sfx.chime(); toast('⭐ Ulduz tapdın! +5 XP'); }
+      break;
+    case 'board':
+      renderBoard(m.rows);
+      break;
     case 'correct':
       // server mövqeyi qəbul etmədi (çox sürətli hərəkət) — serverin yerinə qayıt
       player.pos.set(m.x, m.y, m.z);
@@ -204,6 +232,8 @@ function handle(m) {
         player.hp = 0;
         player.weapon = 0;
         player.emote = 0;
+        player.sitting = null;
+        inter.charging = false;
         player.killer = m.by;
         player.deathEnd = performance.now() + (m.respawn ?? 6000);
         if (document.pointerLockElement) document.exitPointerLock();
@@ -435,6 +465,8 @@ $('btn-customize').onclick = () => openCreator(false);
 function enterGame(m) {
   if (!world) {
     world = buildWorld(scene, CAMPUS, settings.quality);
+    play = new Play(scene, CAMPUS, sfx);
+    window.__bmu.play = play;
     buildStaticNpcs();
   }
   state.myId = m.you.id;
@@ -561,6 +593,12 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'Escape' && gallows.open) { closeGallowsPanel(); return; }
   if (e.code === 'KeyF' && (nearGallows() || gallows.open)) { gallows.open ? closeGallowsPanel() : openGallowsPanel(); return; }
+  if (e.code === 'KeyF') { if (!e.repeat) interactDown(); return; }
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    if (!e.repeat) { send({ t: 'board' }); $('board').hidden = false; }
+    return;
+  }
   if (e.code === 'KeyC') { openCreator(false); return; }
   if (e.code === 'KeyP') { togglePhotoMode(); return; }
   if (e.code === 'KeyM') { minimap.toggle(); return; }
@@ -570,7 +608,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') e.preventDefault();
   keys.add(e.code);
 });
-window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('keyup', (e) => {
+  keys.delete(e.code);
+  if (e.code === 'KeyF') interactUp();
+  if (e.code === 'Tab') $('board').hidden = true;
+});
 window.addEventListener('blur', () => keys.clear());
 
 function setEmote(n) {
@@ -705,6 +747,17 @@ function updatePlayer(dt) {
   root.rotation.x += (0 - root.rotation.x) * Math.min(1, dt * 8);
   const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   const str = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+  // skamyada oturub: hərəkət düyməsi basılana qədər yerində qalır
+  if (player.sitting) {
+    if (fwd || str || keys.has('Space')) stand();
+    else {
+      root.position.copy(player.pos);
+      root.rotation.y = player.ry;
+      animateRig(player.char.rig, dt, 0, { emote: 5 });
+      sendPos(dt, false);
+      return;
+    }
+  }
   const turn = (keys.has('KeyQ') ? 1 : 0) - (keys.has('KeyE') ? 1 : 0);
   if (turn) { cam.yaw += turn * 2.2 * dt; $('look-hint').classList.add('gone'); }
   const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
@@ -744,14 +797,126 @@ function updatePlayer(dt) {
     air: !player.onGround, emote: player.emote, weapon: player.weapon, aim: cam.pitch, punch: player.punchT,
   });
 
+  sendPos(dt, target > 0);
+}
+
+/** Mövqeni serverə saniyədə 10 dəfə (dəyişibsə) göndərir */
+function sendPos(dt, moving) {
   sendTimer += dt;
-  if (sendTimer >= 0.1) {
-    sendTimer = 0;
-    const msg = { t: 'pos', x: +player.pos.x.toFixed(2), y: +player.pos.y.toFixed(2), z: +player.pos.z.toFixed(2), ry: +player.ry.toFixed(2), m: target ? 1 : 0, e: player.emote, w: player.weapon };
-    const k = JSON.stringify(msg);
-    const now = performance.now();
-    if (k !== lastSent || now - lastSentAt > 1000) { send(msg); lastSent = k; lastSentAt = now; }
+  if (sendTimer < 0.1) return;
+  sendTimer = 0;
+  const msg = { t: 'pos', x: +player.pos.x.toFixed(2), y: +player.pos.y.toFixed(2), z: +player.pos.z.toFixed(2), ry: +player.ry.toFixed(2), m: moving ? 1 : 0, e: player.emote, w: player.weapon };
+  const k = JSON.stringify(msg);
+  const now = performance.now();
+  if (k !== lastSent || now - lastSentAt > 1000) { send(msg); lastSent = k; lastSentAt = now; }
+}
+
+// ---------- İnteraksiyalar (F): oturmaq, topa vurmaq ----------
+const inter = { current: null, charging: false, charge: 0, ball: null };
+function findInteraction() {
+  if (player.dead || state.mode !== 'game' || !world) return null;
+  if (player.sitting) return { kind: 'stand', label: 'Qalx' };
+  const nb = play?.nearestBall(player.pos);
+  if (nb && nb.dist < 2.0 && Math.abs(nb.ball.py - player.pos.y) < 2.2) {
+    return { kind: 'ball', ball: nb.ball, label: nb.ball.cfg.kind === 'basketball' ? 'Səbətə at — basılı saxla, ortada burax' : 'Topa vur — basılı saxla (güc)' };
   }
+  let best = null, bd = 1.7;
+  for (const s of world.seats) {
+    const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best ? { kind: 'sit', seat: best, label: 'Otur' } : null;
+}
+function sit(seat) {
+  if (player.weapon) setWeapon(0);
+  player.sitting = seat;
+  player.pos.set(seat.x, 0, seat.z);
+  player.ry = seat.ry;
+  player.vy = 0;
+  player.speed = 0;
+  player.emote = 5;
+}
+function stand() {
+  const s = player.sitting;
+  player.sitting = null;
+  player.emote = 0;
+  if (s) { player.pos.x += Math.sin(s.ry) * 0.95; player.pos.z += Math.cos(s.ry) * 0.95; }
+}
+function interactDown() {
+  const it = inter.current;
+  if (!it) return;
+  sfx.init();
+  if (it.kind === 'sit') sit(it.seat);
+  else if (it.kind === 'stand') stand();
+  else if (it.kind === 'ball') { inter.charging = true; inter.charge = 0; inter.ball = it.ball; }
+}
+function interactUp() {
+  if (!inter.charging) return;
+  inter.charging = false;
+  kickBall(inter.ball, inter.charge);
+}
+function kickBall(b, p) {
+  if (!b || player.dead || Math.hypot(b.px - player.pos.x, b.pz - player.pos.z) > 2.3) return;
+  let v;
+  if (b.cfg.kind === 'basketball') {
+    // halqaya parabola; güc zolağının ortası (p≈0.5) dəqiq atışdır
+    const h = b.cfg.hoop;
+    // simulyasiya ilə sınanıb: güc 0.44–0.56 aralığında demək olar həmişə səbət, 0.4/0.6-da ~35%
+    const dx = h.x - b.px, dz = h.z - b.pz, dy = h.y - b.py;
+    const T = 0.5 + Math.hypot(dx, dz) * 0.06;
+    const f = 0.97 + 0.06 * p + (Math.random() - 0.5) * 0.008;
+    v = [(dx / T) * f, ((dy + 0.5 * BALL_G * T * T) / T) * f, (dz / T) * f];
+  } else {
+    const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
+    const sp = 6 + 16 * p;
+    v = [fx * sp, 1.2 + 5.5 * p * p, fz * sp];
+  }
+  send({ t: 'kick', id: b.cfg.id, v: v.map((x) => +x.toFixed(3)) });
+  [b.vx, b.vy, b.vz] = v; // dərhal yerli təsir, server sonra təsdiqləyir
+  if (b.py < b.cfg.r + 0.05) b.py = b.cfg.r + 0.05;
+  player.punchT = 0.001;
+  player.ry = Math.atan2(v[0], v[2]);
+  sfx.kick(1);
+}
+function updateInteractions(dt) {
+  inter.current = inter.charging ? inter.current : findInteraction();
+  const it = inter.current;
+  const p = $('iprompt');
+  p.hidden = !it || gallows.open || nearGallows();
+  if (it) p.innerHTML = `<b>F</b> ${it.label}`;
+  if (inter.charging) {
+    inter.charge = Math.min(1, inter.charge + dt / 1.1);
+    if (!inter.ball || Math.hypot(inter.ball.px - player.pos.x, inter.ball.pz - player.pos.z) > 2.4) inter.charging = false;
+  }
+  $('charge').hidden = !inter.charging;
+  $('charge-fill').style.width = `${inter.charge * 100}%`;
+  $('charge').classList.toggle('basket', inter.ball?.cfg.kind === 'basketball');
+  play?.update(dt, clock.elapsedTime, player.pos, !player.dead && state.mode === 'game', send);
+}
+
+// ---------- Liderlər cədvəli (Tab) və böyük elan ----------
+function renderBoard(rows) {
+  const tb = $('board-rows');
+  tb.replaceChildren();
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (r.me) tr.className = 'me';
+    for (const v of [i + 1, `${r.online ? '🟢' : '⚪'} ${r.name}`, r.level, r.kills, r.deaths, r.stars, r.goals]) {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.append(td);
+    }
+    tb.append(tr);
+  });
+}
+let bannerTimer;
+function bigBanner(text) {
+  const b = $('banner');
+  b.textContent = text;
+  b.hidden = false;
+  b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => { b.hidden = true; }, 2600);
 }
 
 const aimOffset = new THREE.Vector3();
@@ -823,10 +988,11 @@ function frame(dt) {
   animateDummies(dt);
   updateStaticNpcs(dt, clock.elapsedTime);
   updateGallowsUi();
+  updateInteractions(dt);
   updateCamera(dt);
   world.update(clock.elapsedTime, dt, camera);
   fx.update(dt);
-  if (!document.body.classList.contains('photo')) minimap.draw(player.pos, player.ry, cam.yaw, others);
+  if (!document.body.classList.contains('photo')) minimap.draw(player.pos, player.ry, cam.yaw, others, play?.stars);
   // zərər effekti və isabət işarəsi
   hurtT = Math.max(0, hurtT - dt * 1.6);
   $('hurt').style.opacity = Math.max(hurtT, player.dead ? 0.55 : player.hp < 30 ? 0.25 + Math.sin(clock.elapsedTime * 5) * 0.08 : 0);

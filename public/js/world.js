@@ -418,6 +418,8 @@ function makeBench(scene, x, z, ry, circles) {
   bench.rotation.y = ry;
   scene.add(bench);
   circles.push({ x, z, r: 1.1 });
+  // oturacaq yeri: skamyanın ortası, üzü skamyanın baxdığı tərəfə
+  return { x: x + Math.sin(ry) * 0.08, z: z + Math.cos(ry) * 0.08, ry };
 }
 
 // ======================= Dünya =======================
@@ -684,7 +686,8 @@ export function buildWorld(scene, campus, quality = 'high') {
     scene.add(rock, base);
     circles.push({ x: mo.x, z: mo.z, r: 1.5 });
   }
-  for (const [bx, bz, ry] of pd.benches || []) makeBench(scene, bx, bz, ry, circles);
+  const seats = [];
+  for (const [bx, bz, ry] of pd.benches || []) seats.push(makeBench(scene, bx, bz, ry, circles));
 
   // ağ taxta çəpər (parkı meydandan ayırır)
   const white = lambert('#f3f1ec');
@@ -730,7 +733,7 @@ export function buildWorld(scene, campus, quality = 'high') {
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
       const clear = pathAngles.every((pa) => Math.abs(Math.atan2(Math.sin(a - pa), Math.cos(a - pa))) > 0.5);
-      if (clear && i % 2 === 0) makeBench(scene, r.x + Math.sin(a) * (r.r + 0.9), r.z + Math.cos(a) * (r.r + 0.9), a + Math.PI, circles);
+      if (clear && i % 2 === 0) seats.push(makeBench(scene, r.x + Math.sin(a) * (r.r + 0.9), r.z + Math.cos(a) * (r.r + 0.9), a + Math.PI, circles));
     }
   }
   // voleybol toru
@@ -782,10 +785,6 @@ export function buildWorld(scene, campus, quality = 'high') {
       new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
     netCone.position.set(h.x, 2.84, h.z + dir * 0.62);
     scene.add(netCone);
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), lambert('#d9762b'));
-    ball.position.set(h.x + 2.2, 0.12, h.z + dir * 5);
-    ball.castShadow = true;
-    scene.add(ball);
   }
 
   // --- Dar ağacı ---
@@ -875,7 +874,7 @@ export function buildWorld(scene, campus, quality = 'high') {
     traffic?.(dt);
   };
 
-  return { colliders, circles, blockers, bounds: b, update };
+  return { colliders, circles, blockers, seats, bounds: b, update };
 }
 
 function segDist(x, z, e) {

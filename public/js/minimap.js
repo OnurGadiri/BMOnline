@@ -64,7 +64,7 @@ export class Minimap {
     this.canvas.classList.toggle('big', this.big);
   }
 
-  draw(player, facing, camYaw, others) {
+  draw(player, facing, camYaw, others, stars) {
     const cv = this.canvas, g = this.g;
     const cw = cv.clientWidth, ch = cv.clientHeight;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -107,6 +107,22 @@ export class Minimap {
         g.fillStyle = '#ffcf9a';
         g.fillText('Dar ağacı', sx(this.c.gallows.x), sz(this.c.gallows.z) - 10);
       }
+    }
+    // ulduzlar
+    for (const s of stars?.values() || []) {
+      const x = sx(s.x), z = sz(s.z);
+      if (x < -5 || z < -5 || x > cw + 5 || z > ch + 5) continue;
+      g.fillStyle = '#ffd23f';
+      g.strokeStyle = '#7a5200';
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 - Math.PI / 2, r = i % 2 ? 2 : 4.5;
+        g.lineTo(x + Math.cos(a) * r, z + Math.sin(a) * r);
+      }
+      g.closePath();
+      g.fill();
+      g.stroke();
     }
     // digər oyunçular və NPC-lər
     for (const o of others.values()) {

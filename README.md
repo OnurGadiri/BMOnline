@@ -79,6 +79,16 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   damage vignette, overhead health bars and synthesized sound effects (no audio files needed).
 - Tuning values live in the `W` object in `server/server.js`.
 
+### Activities
+- **Benches:** walk up to any bench and press **F** to sit (others see you sitting); move to stand up.
+- **Football:** a shared, server-simulated ball on the pitch. Run into it to dribble; hold **F** to charge
+  a kick and release to shoot in the direction you are looking. Goals are announced to everyone (+15 XP).
+- **Basketball:** hold **F** next to the ball on the volleyball court and release in the middle of the
+  power bar to shoot at the hoop on the wall (+10 XP per basket).
+- **Stars:** 18 golden stars are scattered around the campus (also shown on the minimap). Touch one to
+  collect it (+5 XP); it reappears somewhere else after 45 seconds.
+- **Leaderboard:** hold **Tab** to see the top players (level, kills, deaths, stars, goals/baskets).
+
 ### Gallows
 - Walk up to the gallows and press **F** to open its panel.
 - Create a fictional "prisoner" NPC in the character creator and pick a name from the preset list
@@ -102,7 +112,8 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 | Left click | Punch / shoot |
 | `R` | Reload |
 | `1` `2` `3` | Emotes: wave, dance, cheer |
-| `F` | Use the gallows (when nearby) |
+| `F` | Interact: sit on a bench, kick / shoot a ball (hold to charge), use the gallows |
+| `Tab` (hold) | Leaderboard |
 | `C` | Open the character creator |
 | `M` | Toggle the full campus map (a minimap is always shown) |
 | `P` | Photo mode (hides the UI for screenshots) |
@@ -138,6 +149,7 @@ public/js/world.js        Campus: buildings, paths, plaza, football pitch, gallo
 public/js/decor.js        Sky, clouds, grass, hedges, flowers, street lamps, rocks
 public/js/combat.js       Combat effects, sounds, health bars, aim raycasting
 public/js/minimap.js      Minimap and full campus map
+public/js/play.js         Balls (client-side prediction) and collectible stars
 public/js/merge.js        Merges static meshes into vertex-coloured batches (fewer draw calls)
 tests/                    Map validation and server protocol tests
 public/data/campus.json   Map data: buildings, paths / NPC navigation graph, spawn, static NPCs

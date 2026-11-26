@@ -440,6 +440,7 @@ export function buildCharacter(input) {
     body, spine, head, eyes,
     legL: legs[0], legR: legs[1], kneeL: knees[0], kneeR: knees[1],
     armL: arms[0], armR: arms[1], elbowL: elbows[0], elbowR: elbows[1], handR: hands[1],
+    hipH: hipY * a.height, // ombanın yerdən hündürlüyü (oturma üçün)
     phase: Math.random() * 6, t: Math.random() * 10, blink: 2 + Math.random() * 3,
   };
   mergeRig(root);
@@ -594,6 +595,13 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.legL = -0.6; T.kneeL = 1.0; T.legR = 0.15; T.kneeR = 0.45;
     T.armLz = 0.7; T.armRz = -0.7; T.armLx = -0.3; T.armRx = -0.3;
     T.elbowL = T.elbowR = -0.5;
+  } else if (emote === 5) {
+    // skamyada oturmaq: omba oturacaq hündürlüyündə (~0.52 m), budlar irəli, dizlər aşağı
+    T.bodyY = 0.52 - (r.hipH || 0.92);
+    T.legL = T.legR = -1.5; T.kneeL = T.kneeR = 1.45;
+    T.armLx = T.armRx = -0.55; T.armLz = 0.12; T.armRz = -0.12; T.elbowL = T.elbowR = -0.75;
+    T.spineX = -0.06;
+    T.headY = Math.sin(t * 0.35) * 0.35; T.headX = Math.sin(t * 0.23) * 0.08;
   } else if (emote === 4) {
     // dar ağacında: əllər arxada bağlı, baş aşağı; çırpınanda yırğalanır
     const st = opt.struggle ? Math.sin(t * 22) : 0;
