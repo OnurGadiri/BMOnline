@@ -180,11 +180,13 @@ function rectorateFront(R) {
     g.shadowBlur = 4;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.font = 'bold 34px Georgia, "Times New Roman", serif';
-    g.fillText('BAKI MÜHƏNDİSLİK', w * 0.24, h * 0.05);
-    g.fillText('UNİVERSİTETİ', w * 0.24, h * 0.115);
-    g.fillText('BAKU ENGINEERING', w * 0.76, h * 0.05);
-    g.fillText('UNIVERSITY', w * 0.76, h * 0.115);
+    // mərkəzdəki şüşə zolağa (w*0.475..0.525) toxunmasın
+    g.font = 'bold 30px Georgia, "Times New Roman", serif';
+    const maxW = w * 0.4;
+    g.fillText('BAKI MÜHƏNDİSLİK', w * 0.25, h * 0.05, maxW);
+    g.fillText('UNİVERSİTETİ', w * 0.25, h * 0.115, maxW);
+    g.fillText('BAKU ENGINEERING', w * 0.75, h * 0.05, maxW);
+    g.fillText('UNIVERSITY', w * 0.75, h * 0.115, maxW);
     g.shadowBlur = 0;
     // pəncərələr (4 mərtəbə, hər tərəfdə 2 sütun)
     for (let f = 0; f < 4; f++) {

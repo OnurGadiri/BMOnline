@@ -165,6 +165,11 @@ function handle(m) {
         if (o) { o.hp = m.hp; o.hpBar?.userData.set(m.hp); }
       }
       break;
+    case 'correct':
+      // server mövqeyi qəbul etmədi (çox sürətli hərəkət) — serverin yerinə qayıt
+      player.pos.set(m.x, m.y, m.z);
+      player.vy = 0;
+      break;
     case 'ammo':
       player.ammo = m.ammo;
       player.reloading = false;

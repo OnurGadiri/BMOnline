@@ -12,7 +12,8 @@ const ROOT = path.join(__dirname, '..');
 const PUBLIC = path.join(ROOT, 'public');
 const VENDOR = path.join(ROOT, 'node_modules', 'three', 'build');
 const ADDONS = path.join(ROOT, 'node_modules', 'three', 'examples', 'jsm');
-const DATA_DIR = path.join(ROOT, 'data');
+// BMU_DATA_DIR — testlər üçün ayrıca məlumat qovluğu (əsl oyunçu məlumatlarına toxunmasın)
+const DATA_DIR = process.env.BMU_DATA_DIR ? path.resolve(process.env.BMU_DATA_DIR) : path.join(ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'players.json');
 
 const OPTIONS = JSON.parse(fs.readFileSync(path.join(PUBLIC, 'data', 'options.json'), 'utf8'));
@@ -307,11 +308,26 @@ function respawn(e) {
   broadcast({ t: 'hp', id: e.key, hp: 100 });
 }
 
+/** Oyunçu çıxdı: xarakteri oflayn NPC-yə çevrilir və kampusda gəzməyə davam edir */
+function goOffline(key) {
+  const e = entities.get(key);
+  if (!e || !e.online) return;
+  e.online = false;
+  e.w = 0;
+  if (!e.dead) startAI(e); // ölüdürsə, yenidən doğulanda AI başlayır
+  broadcast({ t: 'entity', e: publicEntity(e) });
+  broadcast({ t: 'sys', msg: `${e.name} oyundan çıxdı — xarakteri kampusda gəzməyə davam edir.` });
+  scheduleSave();
+}
+
 const vec3 = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(Number(n))) ? v.map(Number) : null;
 
 // ---------- Giriş qoruması (PIN təxmin etməyə qarşı) ----------
-const failByIp = new Map();     // IP -> { first, n, lockUntil }
-const failByAcc = new Map();    // hesab -> ...
+// Qeyd: universitet Wi-Fi-ında hamı eyni IP ilə görünür, ona görə IP üzrə limit yüksəkdir,
+// bir hesaba eyni IP-dən cəhdlər isə tez bloklanır.
+const failByIpAcc = new Map();  // "IP|hesab" -> { first, n, lockUntil }
+const failByIp = new Map();     // IP -> ... (çoxlu hesabı yoxlamağa qarşı)
+const failByAcc = new Map();    // hesab -> ... (fərqli IP-lərdən hücuma qarşı)
 const newAccByIp = new Map();   // IP -> yeni hesab sayı
 function lockedFor(map, key) {
   const r = map.get(key);
@@ -327,7 +343,7 @@ function countHit(map, key, max, windowMs, lockMs) {
 }
 setInterval(() => {
   const now = Date.now();
-  for (const map of [failByIp, failByAcc, newAccByIp]) {
+  for (const map of [failByIpAcc, failByIp, failByAcc, newAccByIp]) {
     for (const [k, r] of map) if (r.lockUntil < now && now - r.first > 3600_000) map.delete(k);
   }
 }, 600_000);
@@ -358,8 +374,8 @@ wss.on('connection', (ws, req) => {
       if (!/^[\p{L}\p{N}_. -]{3,16}$/u.test(name)) return send(ws, { t: 'loginErr', msg: 'Ad 3-16 simvol olmalıdır (hərf, rəqəm, _ . -).' });
       if (!/^\d{4,8}$/.test(pin)) return send(ws, { t: 'loginErr', msg: 'PIN 4-8 rəqəm olmalıdır.' });
       const key = name.toLowerCase();
-      const ipWait = lockedFor(failByIp, ws.ip), accWait = lockedFor(failByAcc, key);
-      if (ipWait || accWait) return send(ws, { t: 'loginErr', msg: `Çox səhv cəhd. ${Math.max(ipWait, accWait)} dəqiqə sonra yenidən yoxla.` });
+      const wait = Math.max(lockedFor(failByIpAcc, `${ws.ip}|${key}`), lockedFor(failByIp, ws.ip), lockedFor(failByAcc, key));
+      if (wait) return send(ws, { t: 'loginErr', msg: `Çox səhv cəhd. ${wait} dəqiqə sonra yenidən yoxla.` });
       let acc = db.accounts[key];
       let isNew = false;
       if (!acc) {
@@ -370,13 +386,21 @@ wss.on('connection', (ws, req) => {
         isNew = true;
         scheduleSave();
       } else if (!crypto.timingSafeEqual(Buffer.from(hashPin(pin, acc.salt), 'hex'), Buffer.from(acc.hash, 'hex'))) {
-        countHit(failByIp, ws.ip, 5, 600_000, 600_000);
-        countHit(failByAcc, key, 8, 900_000, 900_000);
+        countHit(failByIpAcc, `${ws.ip}|${key}`, 5, 600_000, 600_000);
+        countHit(failByIp, ws.ip, 25, 600_000, 600_000);
+        countHit(failByAcc, key, 10, 900_000, 900_000);
         return send(ws, { t: 'loginErr', msg: 'PIN yanlışdır.' });
       }
       // Eyni hesab başqa yerdə açıqdırsa — köhnəni çıxart
       const old = sockets.get(key);
-      if (old && old !== ws) { send(old, { t: 'kicked', msg: 'Bu hesabla başqa yerdən daxil olundu.' }); old.key = null; old.close(); }
+      if (old && old !== ws) {
+        send(old, { t: 'kicked', msg: 'Bu hesabla başqa yerdən daxil olundu.' });
+        // köhnə cihaz oyundadırsa, xarakter NPC-yə keçsin (yeni cihaz qoşulanda yenə onlayn olacaq)
+        if (old.inGame) goOffline(key);
+        old.key = null;
+        old.inGame = false;
+        old.close();
+      }
       ws.key = key;
       sockets.set(key, ws);
       return send(ws, { t: 'loginOk', name: acc.name, isNew, appearance: acc.appearance, level: acc.level, xp: acc.xp, xpNext: xpForLevel(acc.level) });
@@ -527,6 +551,13 @@ wss.on('connection', (ws, req) => {
       const b = CAMPUS.bounds;
       const x = Number(m.x), y = Number(m.y), z = Number(m.z), ry = Number(m.ry);
       if (![x, y, z, ry].every(Number.isFinite)) return;
+      // Teleport qoruması: qaçış sürətindən (7.5 m/s) xeyli sürətli hərəkət qəbul olunmur
+      const nowP = Date.now();
+      const dtp = Math.min(2, Math.max(0.05, (nowP - (ws.lastPosAt || nowP)) / 1000));
+      ws.lastPosAt = nowP;
+      if (Math.hypot(x - e.x, z - e.z) > 9.5 * dtp + 2.5) {
+        return send(ws, { t: 'correct', x: e.x, y: e.y, z: e.z });
+      }
       e.x = Math.min(b.maxX, Math.max(b.minX, x));
       e.z = Math.min(b.maxZ, Math.max(b.minZ, z));
       e.y = Math.min(10, Math.max(0, y));
@@ -561,15 +592,7 @@ wss.on('connection', (ws, req) => {
     const key = ws.key;
     if (!key || sockets.get(key) !== ws) return;
     sockets.delete(key);
-    const e = entities.get(key);
-    if (e && ws.inGame) {
-      e.online = false;
-      e.w = 0;
-      if (!e.dead) startAI(e); // ölüdürsə, yenidən doğulanda AI başlayır
-      broadcast({ t: 'entity', e: publicEntity(e) });
-      broadcast({ t: 'sys', msg: `${e.name} oyundan çıxdı — xarakteri kampusda gəzməyə davam edir.` });
-      scheduleSave();
-    }
+    if (ws.inGame) goOffline(key);
   });
 });
 
