@@ -1,0 +1,3 @@
+# BMU Online üçün boş cloudflared ayarı.
+# Quick tunnel istifadəçinin ~/.cloudflared/config.yml faylını oxumasın deyə ayrıca fayl istifadə olunur.
+no-autoupdate: true

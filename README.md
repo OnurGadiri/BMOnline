@@ -23,6 +23,17 @@ Then open <http://localhost:3000>. Friends on the same network can join via `htt
 (find your IP with `ipconfig`; Windows Firewall may ask for permission).
 Set the `PORT` environment variable to use a different port.
 
+### Play online with friends (host on your own PC)
+
+Double-click `start-online.bat`. It starts the server and opens a free
+[Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
+(installing `cloudflared` via winget if needed) and prints a public `https://….trycloudflare.com` link —
+send it to your friends. The link works while the window stays open and changes on every start.
+`tunnel.yml` keeps the quick tunnel independent of any `~/.cloudflared/config.yml` you may already have.
+
+Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10 minutes,
+8 wrong PINs on one account lock that account for 15 minutes, and one IP can create at most 5 accounts per hour.
+
 ## Features
 
 ### Accounts & persistence

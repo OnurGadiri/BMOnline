@@ -307,9 +307,41 @@ function respawn(e) {
 
 const vec3 = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(Number(n))) ? v.map(Number) : null;
 
-wss.on('connection', (ws) => {
+// ---------- Giriş qoruması (PIN təxmin etməyə qarşı) ----------
+const failByIp = new Map();     // IP -> { first, n, lockUntil }
+const failByAcc = new Map();    // hesab -> ...
+const newAccByIp = new Map();   // IP -> yeni hesab sayı
+function lockedFor(map, key) {
+  const r = map.get(key);
+  return r && r.lockUntil > Date.now() ? Math.ceil((r.lockUntil - Date.now()) / 60000) : 0;
+}
+function countHit(map, key, max, windowMs, lockMs) {
+  const now = Date.now();
+  let r = map.get(key);
+  if (!r || now - r.first > windowMs) r = { first: now, n: 0, lockUntil: 0 };
+  r.n++;
+  if (r.n >= max) { r.lockUntil = now + lockMs; r.n = 0; r.first = now; }
+  map.set(key, r);
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const map of [failByIp, failByAcc, newAccByIp]) {
+    for (const [k, r] of map) if (r.lockUntil < now && now - r.first > 3600_000) map.delete(k);
+  }
+}, 600_000);
+
+/** Oyunçunun real IP-si. Cloudflare tuneli vasitəsilə gələndə CF-Connecting-IP başlığına yalnız lokal bağlantıda inanılır. */
+function clientIp(req) {
+  const remote = req.socket.remoteAddress || '';
+  const local = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  const cf = req.headers['cf-connecting-ip'];
+  return local && typeof cf === 'string' && cf ? cf : remote;
+}
+
+wss.on('connection', (ws, req) => {
   ws.key = null;
   ws.inGame = false;
+  ws.ip = clientIp(req);
 
   ws.on('message', (raw) => {
     let m;
@@ -317,19 +349,27 @@ wss.on('connection', (ws) => {
     if (!m || typeof m.t !== 'string') return;
 
     if (m.t === 'login') {
+      if (Date.now() - (ws.lastLogin || 0) < 800) return send(ws, { t: 'loginErr', msg: 'Bir az yavaş 🙂' });
+      ws.lastLogin = Date.now();
       const name = String(m.name || '').trim();
       const pin = String(m.pin || '');
       if (!/^[\p{L}\p{N}_. -]{3,16}$/u.test(name)) return send(ws, { t: 'loginErr', msg: 'Ad 3-16 simvol olmalıdır (hərf, rəqəm, _ . -).' });
       if (!/^\d{4,8}$/.test(pin)) return send(ws, { t: 'loginErr', msg: 'PIN 4-8 rəqəm olmalıdır.' });
       const key = name.toLowerCase();
+      const ipWait = lockedFor(failByIp, ws.ip), accWait = lockedFor(failByAcc, key);
+      if (ipWait || accWait) return send(ws, { t: 'loginErr', msg: `Çox səhv cəhd. ${Math.max(ipWait, accWait)} dəqiqə sonra yenidən yoxla.` });
       let acc = db.accounts[key];
       let isNew = false;
       if (!acc) {
+        if (lockedFor(newAccByIp, ws.ip)) return send(ws, { t: 'loginErr', msg: 'Bu şəbəkədən çox hesab yaradılıb. Bir az sonra yoxla.' });
+        countHit(newAccByIp, ws.ip, 5, 3600_000, 3600_000);
         const salt = crypto.randomBytes(16).toString('hex');
         acc = db.accounts[key] = { name, salt, hash: hashPin(pin, salt), appearance: null, level: 1, xp: 0, pos: null, createdAt: Date.now() };
         isNew = true;
         scheduleSave();
       } else if (!crypto.timingSafeEqual(Buffer.from(hashPin(pin, acc.salt), 'hex'), Buffer.from(acc.hash, 'hex'))) {
+        countHit(failByIp, ws.ip, 5, 600_000, 600_000);
+        countHit(failByAcc, key, 8, 900_000, 900_000);
         return send(ws, { t: 'loginErr', msg: 'PIN yanlışdır.' });
       }
       // Eyni hesab başqa yerdə açıqdırsa — köhnəni çıxart
