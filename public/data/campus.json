@@ -4,12 +4,11 @@
   "spawn": { "x": 25, "z": -150, "ry": 1.5708 },
 
   "buildings": [
-    { "id": "rectorate", "name": "Rektorluq", "x": 73, "z": -140, "w": 26, "d": 24, "h": 17, "style": "brick", "special": "rectorate" },
+    { "id": "rectorate", "name": "Rektorluq", "x": 73, "z": -140, "w": 26, "d": 24, "h": 17, "style": "brick", "special": "rectorate", "roof": "#b65a3e" },
     { "id": "wingNW", "name": "", "x": 76, "z": -177, "w": 20, "d": 50, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
     { "id": "wingSE", "name": "", "x": 76, "z": -103, "w": 20, "d": 50, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
-    { "id": "perpNW", "name": "", "x": 64, "z": -211, "w": 44, "d": 18, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
     { "id": "perpSE", "name": "", "x": 64, "z": -69, "w": 44, "d": 18, "h": 12, "style": "pinkstripe", "roof": "#8d8f93" },
-    { "id": "endNW", "name": "", "x": 36, "z": -211, "w": 12, "d": 22, "h": 13.5, "style": "brickglass" },
+    { "id": "endNW", "name": "", "x": 74, "z": -215, "w": 24, "d": 26, "h": 14, "style": "brickglass", "roof": "#3a3d42" },
     { "id": "endSE", "name": "", "x": 36, "z": -69, "w": 12, "d": 22, "h": 13.5, "style": "brickglass" },
 
     { "id": "prefab1", "name": "Prefabrik 1", "x": 22, "z": -30, "w": 10, "d": 14, "h": 4, "style": "cream", "color": "#e9e4da", "roof": "#7d8085", "labelSide": "w" },
@@ -28,7 +27,8 @@
     { "type": "meadow", "x": -125, "z": -120, "w": 210, "d": 300 },
     { "type": "meadow", "x": -100, "z": 260, "w": 320, "d": 360 },
     { "type": "asphalt", "x": 32.5, "z": -151, "w": 55, "d": 54 },
-    { "type": "garden", "x": 32, "z": -189.5, "w": 52, "d": 19 },
+    { "type": "garden", "x": 32, "z": -209, "w": 52, "d": 58 },
+    { "type": "volley", "x": 74, "z": -240.2, "w": 24, "d": 24 },
     { "type": "garden", "x": 32, "z": -101.5, "w": 52, "d": 41 },
     { "type": "parking", "x": -11, "z": -165, "w": 12, "d": 170, "rows": "z" },
     { "type": "parking", "x": -100, "z": 75, "w": 40, "d": 12, "rows": "x" },
@@ -43,6 +43,10 @@
     "billboard": { "x": 26, "z": -114, "ry": -1.5708 },
     "monument": { "x": 40, "z": -120 },
     "flags": [[55, -157], [55, -160], [55, -163]],
+    "fences": [[8, -180.5, 27.5, -180.5], [32.5, -180.5, 58, -180.5]],
+    "rounds": [{ "x": 30, "z": -205, "r": 5 }],
+    "hoops": [{ "x": 69, "z": -228, "dir": -1 }],
+    "nets": [{ "x1": 68.6, "x2": 79.4, "z": -240.2 }],
     "benches": [
       [10, -124, 3.1416], [22, -124, 3.1416], [40, -124, 3.1416],
       [10, -178, 0], [24, -178, 0], [44, -178, 0],
@@ -62,6 +66,7 @@
   "houses": { "minX": -420, "maxX": 330, "minZ": 300, "maxZ": 520, "count": 70, "avoid": { "minX": -300, "maxX": 112, "minZ": -286, "maxZ": 440 } },
   "highway": { "z": -305, "minX": -500, "maxX": 450, "w": 18 },
   "gate": { "x": 0, "z": -286 },
+  "serviceGate": { "x": 96 },
 
   "gallows": { "x": -92, "z": -140, "platformH": 1.4, "slots": 3, "slotGap": 1.9 },
   "npcs": [
@@ -84,18 +89,20 @@
     "d1": [96, 330], "d2": [28, 370], "d3": [28, 420], "ct": [-14, 358],
     "w1": [-212, -255], "w2": [-212, -140], "w3": [-212, -90],
     "m1": [-80, -150], "gal": [-84, -130],
-    "p1": [30, -150], "door": [56, -140], "g1": [30, -190], "g2": [30, -100],
+    "p1": [30, -150], "door": [56, -140], "g1": [30, -205], "g2": [30, -100],
+    "g4": [58, -214], "g5": [40, -236], "vb": [58, -242], "gate2": [96, -282],
     "pf": [2, 15], "f1": [75, 30], "pk": [-100, 66]
   },
   "edges": [
     ["gate", "a1", "road"], ["a1", "a2", "road"], ["a2", "a3", "road"], ["a3", "j1", "road"],
     ["j1", "L1", "road"], ["L1", "L2", "road"], ["L2", "L3", "road"], ["L3", "L4", "road"], ["L4", "L1", "road"],
-    ["j1", "n1", "road"], ["gate", "n0", "road"], ["n0", "n1", "road"], ["n1", "n2", "road"], ["n2", "n3", "road"], ["n3", "n4", "road"],
+    ["j1", "n1", "road"], ["gate2", "n0", "road"], ["n0", "n1", "road"], ["n1", "n2", "road"], ["n2", "n3", "road"], ["n3", "n4", "road"],
     ["L4", "s1", "road"], ["s1", "s2", "road"], ["s2", "s3", "road"], ["s3", "n4", "road"],
     ["n4", "d1", "road"], ["d1", "d2", "road"],
     ["gate", "w1", "road"], ["w1", "w2", "road"], ["w2", "w3", "road"],
     ["a2", "m1", "path"], ["m1", "w2", "path"], ["m1", "gal", "path"],
     ["a2", "p1", "path"], ["p1", "door", "path"], ["p1", "g1", "path"], ["p1", "g2", "path"],
+    ["g1", "a1", "path"], ["g1", "g4", "path"], ["g1", "g5", "path"], ["g5", "vb", "path"],
     ["j1", "pf", "path"], ["pf", "L4", "path"], ["n2", "f1", "path"],
     ["d2", "d3", "path"], ["d2", "ct", "path"], ["L2", "pk", "path"]
   ]

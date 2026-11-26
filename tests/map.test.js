@@ -75,7 +75,7 @@ for (const a of C.areas || []) {
     const ra = box(a), rb = box(b);
     if (ra.minX < rb.maxX && ra.maxX > rb.minX && ra.minZ < rb.maxZ && ra.maxZ > rb.minZ) warn(`${a.type} sahəsi (${a.x}, ${a.z}) "${b.id}" binası ilə üst-üstə düşür`);
   }
-  if (a.type === 'field' || a.type === 'court') {
+  if (a.type === 'field' || a.type === 'court' || a.type === 'volley') {
     const e = edges.find((e) => ['minX', 'maxX'].some((kx) => ['minZ', 'maxZ'].some((kz) => segDist(box(a)[kx], box(a)[kz], e.x1, e.z1, e.x2, e.z2) < 0)) ||
       segHitsBox(e.x1, e.z1, e.x2, e.z2, box(a, e.type === 'road' ? 4.6 : 1.7)));
     if (e) warn(`${a.type} sahəsi (${a.x}, ${a.z}) ${e.a}-${e.c} yolu ilə kəsişir`);

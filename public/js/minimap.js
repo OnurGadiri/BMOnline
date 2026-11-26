@@ -23,7 +23,7 @@ export class Minimap {
     const g = cv.getContext('2d');
     g.fillStyle = '#5f8f4e';
     g.fillRect(0, 0, cv.width, cv.height);
-    const areaCol = { meadow: '#8a8f5a', garden: '#4f8a43', asphalt: '#6b6e73', paving: '#b9b2a4', parking: '#5f6267', field: '#2f8a45', court: '#3f7fb0' };
+    const areaCol = { meadow: '#8a8f5a', garden: '#4f8a43', asphalt: '#6b6e73', paving: '#b9b2a4', parking: '#5f6267', field: '#2f8a45', court: '#3f7fb0', volley: '#8a8c8f' };
     for (const a of c.areas || []) {
       g.fillStyle = areaCol[a.type] || '#777';
       g.fillRect(this.lx(a.x - a.w / 2), this.lz(a.z - a.d / 2), a.w * PX, a.d * PX);

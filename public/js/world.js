@@ -26,7 +26,7 @@ const lambert = (c) => new THREE.MeshLambertMaterial({ color: c });
 
 // Yer səthi qatları: üst-üstə düşən düz səthlər bu sıra ilə çəkilir (z-fighting / titrəmə olmasın)
 const L = {
-  grass: 0, meadow: 1, garden: 2, asphalt: 3, paving: 3, parking: 4, field: 4, court: 4,
+  grass: 0, meadow: 1, garden: 2, asphalt: 3, paving: 3, parking: 4, field: 4, court: 4, volley: 4, round: 9,
   junctionPave: 5, road: 6, roadPatch: 7, sidewalk: 8, path: 10, pathPatch: 11,
 };
 const layerY = (layer) => 0.004 + layer * 0.004;
@@ -327,6 +327,26 @@ function courtTexture() {
     }
   });
 }
+/** Voleybol meydançası: köhnə asfalt + sarı xətlər (fotodakı kimi). 1 m = 20 px */
+function volleyTexture(w, d) {
+  return canvasTex(w * 20, d * 20, (g, W, H) => {
+    g.fillStyle = '#77797c';
+    g.fillRect(0, 0, W, H);
+    speckle(g, W, H, rng(31), 4000, ['#6c6e71', '#828487', '#707275', '#8a8c8e'], 3);
+    // çatlar və ləkələr
+    g.strokeStyle = 'rgba(40,40,40,0.25)';
+    g.lineWidth = 1.5;
+    const R = rng(32);
+    for (let i = 0; i < 14; i++) { g.beginPath(); let x = R() * W, y = R() * H; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += (R() - 0.5) * 60; y += (R() - 0.5) * 60; g.lineTo(x, y); } g.stroke(); }
+    g.strokeStyle = '#e8c547';
+    g.lineWidth = 5;
+    const cw = 9 * 20, cl = 18 * 20, x0 = (W - cw) / 2, y0 = (H - cl) / 2;
+    g.strokeRect(x0, y0, cw, cl);
+    g.beginPath(); g.moveTo(x0, H / 2); g.lineTo(x0 + cw, H / 2); g.stroke();                 // orta xətt (torun altı)
+    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(x0, H / 2 + s * 60); g.lineTo(x0 + cw, H / 2 + s * 60); g.stroke(); } // hücum xətləri (3 m)
+  });
+}
+
 function azFlagTexture() {
   return canvasTex(300, 150, (g) => {
     g.fillStyle = '#00b5e2'; g.fillRect(0, 0, 300, 50);
@@ -428,6 +448,7 @@ export function buildWorld(scene, campus, quality = 'high') {
   for (const a of campus.areas || []) {
     let mat;
     if (a.type === 'field') mat = new THREE.MeshLambertMaterial({ map: pitchTexture() });
+    else if (a.type === 'volley') mat = new THREE.MeshLambertMaterial({ map: volleyTexture(a.w, a.d) });
     else if (a.type === 'court') mat = new THREE.MeshLambertMaterial({ map: courtTexture() });
     else if (a.type === 'parking') {
       const along = a.rows === 'z' ? a.d : a.w, across = a.rows === 'z' ? a.w : a.d;
@@ -444,7 +465,7 @@ export function buildWorld(scene, campus, quality = 'high') {
     m.position.set(a.x, layerY(layer), a.z);
     m.receiveShadow = true;
     scene.add(m);
-    if (['asphalt', 'paving', 'parking', 'field', 'court'].includes(a.type)) hardAreas.push(a);
+    if (['asphalt', 'paving', 'parking', 'field', 'court', 'volley'].includes(a.type)) hardAreas.push(a);
 
     if (a.type === 'garden') {
       // bordür
@@ -665,6 +686,108 @@ export function buildWorld(scene, campus, quality = 'high') {
   }
   for (const [bx, bz, ry] of pd.benches || []) makeBench(scene, bx, bz, ry, circles);
 
+  // ağ taxta çəpər (parkı meydandan ayırır)
+  const white = lambert('#f3f1ec');
+  for (const [x1, z1, x2, z2] of pd.fences || []) {
+    const len = Math.hypot(x2 - x1, z2 - z1), ry = Math.atan2(x2 - x1, z2 - z1);
+    for (const y of [0.35, 0.75]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, len), white);
+      rail.position.set((x1 + x2) / 2, y, (z1 + z2) / 2);
+      rail.rotation.y = ry;
+      scene.add(rail);
+    }
+    for (let d = 0; d <= len; d += 0.22) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.0, 0.04), white);
+      p.position.set(x1 + ((x2 - x1) * d) / len, 0.5, z1 + ((z2 - z1) * d) / len);
+      p.rotation.y = ry + Math.PI / 2;
+      p.castShadow = true;
+      scene.add(p);
+    }
+    colliders.push({ minX: Math.min(x1, x2) - 0.15, maxX: Math.max(x1, x2) + 0.15, minZ: Math.min(z1, z2) - 0.15, maxZ: Math.max(z1, z2) + 0.15, h: 1 });
+  }
+  // parkın mərkəzində dairəvi meydança + çiçək ləki
+  for (const r of pd.rounds || []) {
+    const ring = new THREE.Mesh(new THREE.CircleGeometry(r.r, 40), groundMat(new THREE.MeshLambertMaterial({ map: repeatTex(pavingTexture(), r.r / 1.7, r.r / 1.7) }), L.round));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(r.x, layerY(L.round), r.z);
+    ring.receiveShadow = true;
+    scene.add(ring);
+    const bed = new THREE.Mesh(new THREE.CylinderGeometry(r.r * 0.5, r.r * 0.52, 0.35, 32), lambert('#d9d4c9'));
+    bed.position.set(r.x, 0.17, r.z);
+    scene.add(bed);
+    const soil = new THREE.Mesh(new THREE.CylinderGeometry(r.r * 0.46, r.r * 0.46, 0.04, 32), lambert('#5a7f3a'));
+    soil.position.set(r.x, 0.36, r.z);
+    scene.add(soil);
+    circles.push({ x: r.x, z: r.z, r: r.r * 0.52 });
+    // skamyalar dairənin kənarında, cığırların ağzından kənarda
+    const pathAngles = [];
+    for (const [na, nc] of campus.edges) {
+      for (const [p, q] of [[na, nc], [nc, na]]) {
+        const [px, pz] = nodes[p], [qx, qz] = nodes[q];
+        if (Math.hypot(px - r.x, pz - r.z) < 1) pathAngles.push(Math.atan2(qx - px, qz - pz));
+      }
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const clear = pathAngles.every((pa) => Math.abs(Math.atan2(Math.sin(a - pa), Math.cos(a - pa))) > 0.5);
+      if (clear && i % 2 === 0) makeBench(scene, r.x + Math.sin(a) * (r.r + 0.9), r.z + Math.cos(a) * (r.r + 0.9), a + Math.PI, circles);
+    }
+  }
+  // voleybol toru
+  for (const n of pd.nets || []) {
+    for (const x of [n.x1, n.x2]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 8), lambert('#d8d8d8'));
+      post.position.set(x, 1.3, n.z);
+      post.castShadow = true;
+      scene.add(post);
+      circles.push({ x, z: n.z, r: 0.2 });
+    }
+    const span = n.x2 - n.x1;
+    const netTex = canvasTex(256, 64, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(30,30,30,0.85)';
+      g.lineWidth = 1;
+      for (let x = 0; x <= w; x += 6) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
+      for (let y = 0; y <= h; y += 6) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+      g.fillStyle = '#f2f2f2';
+      g.fillRect(0, 0, w, 8);
+      g.fillRect(0, h - 4, w, 4);
+    });
+    netTex.wrapS = THREE.RepeatWrapping;
+    netTex.repeat.set(span / 4, 1);
+    const net = new THREE.Mesh(new THREE.PlaneGeometry(span, 1), new THREE.MeshLambertMaterial({ map: netTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide }));
+    net.position.set((n.x1 + n.x2) / 2, 2.0, n.z);
+    scene.add(net);
+  }
+  // divarda basketbol halqası
+  for (const h of pd.hoops || []) {
+    const dir = h.dir || -1; // divardan hansı tərəfə çıxır (z oxu)
+    const boardTex = canvasTex(180, 105, (g, w, hh) => {
+      g.fillStyle = '#f4f4f4'; g.fillRect(0, 0, w, hh);
+      g.strokeStyle = '#222'; g.lineWidth = 5; g.strokeRect(3, 3, w - 6, hh - 6);
+      g.strokeRect(w / 2 - 30, hh - 50, 60, 42);
+    });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.05, 0.05), [lambert('#eee'), lambert('#eee'), lambert('#eee'), lambert('#eee'),
+      new THREE.MeshLambertMaterial({ map: boardTex }), new THREE.MeshLambertMaterial({ map: boardTex })]);
+    board.position.set(h.x, 3.45, h.z + dir * 0.35);
+    scene.add(board);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.35), lambert('#555'));
+    arm.position.set(h.x, 3.45, h.z + dir * 0.17);
+    scene.add(arm);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.02, 6, 20), lambert('#e05a1f'));
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(h.x, 3.05, h.z + dir * 0.62);
+    scene.add(rim);
+    const netCone = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.14, 0.4, 12, 1, true),
+      new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+    netCone.position.set(h.x, 2.84, h.z + dir * 0.62);
+    scene.add(netCone);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), lambert('#d9762b'));
+    ball.position.set(h.x + 2.2, 0.12, h.z + dir * 5);
+    ball.castShadow = true;
+    scene.add(ball);
+  }
+
   // --- Dar ağacı ---
   if (campus.gallows) buildGallows(scene, campus.gallows, colliders);
 
@@ -685,8 +808,22 @@ export function buildWorld(scene, campus, quality = 'high') {
   addFence(b.minX, b.maxZ, b.maxX, b.maxZ);
   addFence(b.minX, b.minZ, b.minX, b.maxZ);
   addFence(b.maxX, b.minZ, b.maxX, b.maxZ);
+  // cənub-qərb hasarında iki keçid: əsas darvaza və arxa yolun xidməti girişi
+  const sg = campus.serviceGate;
   addFence(b.minX, b.minZ, g.x - 9, b.minZ);
-  addFence(g.x + 9, b.minZ, b.maxX, b.minZ);
+  if (sg) {
+    addFence(g.x + 9, b.minZ, sg.x - 7.5, b.minZ);
+    addFence(sg.x + 7.5, b.minZ, b.maxX, b.minZ);
+    for (const side of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3, 0.8), lambert('#d9d4cb'));
+      p.position.set(sg.x + side * 7.5, 1.5, b.minZ);
+      p.castShadow = true;
+      scene.add(p);
+      colliders.push({ minX: sg.x + side * 7.5 - 0.4, maxX: sg.x + side * 7.5 + 0.4, minZ: b.minZ - 0.4, maxZ: b.minZ + 0.4, h: 3 });
+    }
+  } else {
+    addFence(g.x + 9, b.minZ, b.maxX, b.minZ);
+  }
   for (const side of [-1, 1]) {
     const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.4, 6.5, 1.4), lambert('#e9e4da'));
     pillar.position.set(g.x + side * 8, 3.25, g.z);
@@ -777,10 +914,15 @@ function buildBuilding(scene, bd, R, colliders, blockers) {
   plinth.position.set(bd.x, 0.3, bd.z);
   plinth.receiveShadow = true;
   scene.add(plinth);
-  const parapet = new THREE.Mesh(new THREE.BoxGeometry(bd.w + 0.5, 0.6, bd.d + 0.5), lambert(style.startsWith('brick') ? '#7c3a2a' : '#d9d4cb'));
-  parapet.position.set(bd.x, bd.h + 0.3, bd.z);
-  parapet.castShadow = true;
-  scene.add(parapet);
+  // dam kənarı (parapet): yalnız kənarlarda halqa — damın öz rəngi görünsün
+  const parMat = lambert(style.startsWith('brick') ? '#7c3a2a' : '#d9d4cb');
+  const pw = bd.w + 0.5, pd2 = bd.d + 0.5, t = 0.45;
+  for (const [w, d, x, z] of [[pw, t, 0, -pd2 / 2 + t / 2], [pw, t, 0, pd2 / 2 - t / 2], [t, pd2, -pw / 2 + t / 2, 0], [t, pd2, pw / 2 - t / 2, 0]]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(w, 0.6, d), parMat);
+    p.position.set(bd.x + x, bd.h + 0.3, bd.z + z);
+    p.castShadow = true;
+    scene.add(p);
+  }
   if (bd.h > 6) {
     const units = Math.max(1, Math.round((bd.w * bd.d) / 350));
     for (let i = 0; i < units; i++) {
