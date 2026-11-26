@@ -33,7 +33,7 @@ window.__bmu = { creator }; // konsoldan sazlama üçün
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#d8ecfb');
 scene.fog = new THREE.Fog('#c3def3', 180, 700);
-const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 1500);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.25, 1500);
 scene.add(new THREE.HemisphereLight('#d6ebff', '#5f7d45', 1.25));
 const sun = new THREE.DirectionalLight('#fff0d4', 3.0);
 sun.castShadow = true;

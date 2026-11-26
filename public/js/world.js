@@ -20,6 +20,21 @@ function canvasTex(w, h, draw) {
   return t;
 }
 const lambert = (c) => new THREE.MeshLambertMaterial({ color: c });
+
+// Yer səthi qatları: üst-üstə düşən düz səthlər bu sıra ilə çəkilir (z-fighting / titrəmə olmasın)
+const L = {
+  grass: 0, meadow: 1, garden: 2, asphalt: 3, paving: 3, parking: 4, field: 4, court: 4,
+  junctionPave: 5, road: 6, roadPatch: 7, sidewalk: 8, path: 10, pathPatch: 11,
+};
+const layerY = (layer) => 0.004 + layer * 0.004;
+function groundMat(mat, layer) {
+  if (layer > 0) {
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -layer;
+    mat.polygonOffsetUnits = -layer * 4;
+  }
+  return mat;
+}
 const repeatTex = (t, rx, ry) => {
   const c = t.clone();
   c.wrapS = c.wrapT = THREE.RepeatWrapping;
@@ -203,9 +218,9 @@ function grassTexture(base = '#78ad5f', shades = ['#6c9f55', '#85b96b', '#71a65a
     g.fillRect(0, 0, w, h);
     const R = rng(77);
     speckle(g, w, h, R, 5000, shades, 3);
-    for (let i = 0; i < 25; i++) {
-      g.fillStyle = 'rgba(60,90,40,0.12)';
-      g.beginPath(); g.arc(R() * w, R() * h, 10 + R() * 30, 0, Math.PI * 2); g.fill();
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = R() < 0.5 ? 'rgba(60,90,40,0.045)' : 'rgba(150,190,110,0.04)';
+      g.beginPath(); g.arc(R() * w, R() * h, 6 + R() * 18, 0, Math.PI * 2); g.fill();
     }
   });
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -227,9 +242,9 @@ function meadowTexture() {
 }
 function asphaltTexture() {
   const t = canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = '#6a6d72';
+    g.fillStyle = '#62656a';
     g.fillRect(0, 0, w, h);
-    speckle(g, w, h, rng(13), 7000, ['#5e6166', '#74777c', '#66696e', '#7b7e83'], 2);
+    speckle(g, w, h, rng(13), 3000, ['#585b60', '#6d7075', '#5f6267'], 2);
   });
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
@@ -403,7 +418,6 @@ export function buildWorld(scene, campus, quality = 'high') {
     meadow: meadowTexture(), garden: grassTexture('#6aa553', ['#5e9a4a', '#77b35f', '#629f4e']),
     asphalt: asphaltTexture(), paving: pavingTexture(), parking: parkingTexture(),
   };
-  const areaY = { meadow: 0.01, garden: 0.015, asphalt: 0.03, paving: 0.03, parking: 0.032, field: 0.035, court: 0.035 };
   const hardAreas = [];
   for (const a of campus.areas || []) {
     let mat;
@@ -418,9 +432,10 @@ export function buildWorld(scene, campus, quality = 'high') {
       const s = a.type === 'paving' ? 3.4 : 8;
       mat = new THREE.MeshLambertMaterial({ map: repeatTex(tex[a.type] || tex.asphalt, a.w / s, a.d / s) });
     }
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(a.w, a.d), mat);
+    const layer = L[a.type] ?? L.asphalt;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(a.w, a.d), groundMat(mat, layer));
     m.rotation.x = -Math.PI / 2;
-    m.position.set(a.x, areaY[a.type] ?? 0.02, a.z);
+    m.position.set(a.x, layerY(layer), a.z);
     m.receiveShadow = true;
     scene.add(m);
     if (['asphalt', 'paving', 'parking', 'field', 'court'].includes(a.type)) hardAreas.push(a);
@@ -488,45 +503,106 @@ export function buildWorld(scene, campus, quality = 'high') {
     }
   }
 
-  // --- Yollar (asfalt) və cığırlar (daş döşəmə) ---
+  // --- Yol şəbəkəsi: asfalt yollar, səkilər, bordürlər, cığırlar ---
+  // Qovşaqlarda heç bir zolaq başqa yolun içinə girmir; hər yer qatının öz sırası var (titrəmə olmasın).
   const nodes = campus.nodes;
-  const edges = [];
-  const roadTex = roadTexture(), paveTex = pavingTexture();
+  const roadTex = roadTexture(), paveTex = pavingTexture(), asphTex = asphaltTexture();
   const curbMat = lambert('#a39c8e');
-  const addStrip = (x1, z1, x2, z2, width, len, offset, y, mat) => {
-    const geo = new THREE.PlaneGeometry(width, len);
+  const edges = campus.edges.map(([a, c, type = 'path']) => {
+    const [x1, z1] = nodes[a], [x2, z2] = nodes[c];
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    const dx = (x2 - x1) / len, dz = (z2 - z1) / len;
+    // rx,rz — yolun sağ tərəfi (mesh-in lokal +x oxu)
+    return { a, c, x1, z1, x2, z2, len, dx, dz, rx: dz, rz: -dx, road: type === 'road', half: type === 'road' ? 6.7 : 1.9 };
+  });
+  const inc = {};
+  for (const e of edges) {
+    (inc[e.a] ||= []).push({ e, ux: e.dx, uz: e.dz });
+    (inc[e.c] ||= []).push({ e, ux: -e.dx, uz: -e.dz });
+  }
+  const roadDeg = (n) => inc[n].filter((o) => o.e.road).length;
+  const straightRoad = (n) => {
+    const r = inc[n].filter((o) => o.e.road);
+    return r.length === 2 && r[0].ux * r[1].ux + r[0].uz * r[1].uz < -0.95;
+  };
+  /** Qovşaqda bu kənarın (s tərəfdəki) zolağı neçə metr kəsilməlidir ki, başqa yola girməsin */
+  const trimAt = (node, e, ux, uz, s, offs, filter, otherHalf) => {
+    const [nx, nz] = nodes[node];
+    const others = inc[node].filter((o) => o.e !== e && filter(o.e) && o.ux * ux + o.uz * uz > -0.95);
+    if (!others.length) return 0;
+    for (let t = 0; t <= 30; t += 0.25) {
+      const clear = offs.every((o) => {
+        const px = nx + ux * t + e.rx * s * o, pz = nz + uz * t + e.rz * s * o;
+        return others.every((ot) => segDist(px, pz, ot.e) >= otherHalf(ot.e));
+      });
+      if (clear) return t;
+    }
+    return 30;
+  };
+  const strip = (e, t0, t1, offset, width, layer, mat) => {
+    const L = t1 - t0;
+    if (L <= 0.05) return;
+    const geo = new THREE.PlaneGeometry(width, L);
     geo.rotateX(-Math.PI / 2);
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set((x1 + x2) / 2, y, (z1 + z2) / 2);
-    m.rotation.y = Math.atan2(x2 - x1, z2 - z1);
-    if (offset) m.translateX(offset);
+    const m = new THREE.Mesh(geo, groundMat(mat, layer));
+    const mid = (t0 + t1) / 2;
+    m.position.set(e.x1 + e.dx * mid + e.rx * offset, layerY(layer), e.z1 + e.dz * mid + e.rz * offset);
+    m.rotation.y = Math.atan2(e.dx, e.dz);
     m.receiveShadow = true;
     scene.add(m);
   };
-  const addCurb = (x1, z1, x2, z2, len, offset) => {
-    const c = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.14, len), curbMat);
-    c.position.set((x1 + x2) / 2, 0.07, (z1 + z2) / 2);
-    c.rotation.y = Math.atan2(x2 - x1, z2 - z1);
-    c.translateX(offset);
+  const curb = (e, t0, t1, offset) => {
+    const L = t1 - t0;
+    if (L <= 0.1) return;
+    const c = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.14, L), curbMat);
+    const mid = (t0 + t1) / 2;
+    c.position.set(e.x1 + e.dx * mid + e.rx * offset, 0.07, e.z1 + e.dz * mid + e.rz * offset);
+    c.rotation.y = Math.atan2(e.dx, e.dz);
     c.receiveShadow = true;
     scene.add(c);
   };
-  for (const [a, c, type = 'path'] of campus.edges) {
-    const [x1, z1] = nodes[a], [x2, z2] = nodes[c];
-    const len = Math.hypot(x2 - x1, z2 - z1);
-    if (type === 'road') {
-      const L = len + 9;
-      addStrip(x1, z1, x2, z2, 9, L, 0, 0.04, new THREE.MeshLambertMaterial({ map: repeatTex(roadTex, 1, L / 12) }));
+  const disc = (x, z, r, layer, mat) => {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(r, 28), groundMat(mat, layer));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, layerY(layer), z);
+    m.receiveShadow = true;
+    scene.add(m);
+  };
+  const isRoad = (e) => e.road;
+  edges.forEach((e, i) => {
+    const ends = [[e.a, e.dx, e.dz], [e.c, -e.dx, -e.dz]];
+    if (e.road) {
+      // asfalt: qovşaqda dayanır, dalanda bir az uzanır
+      const ext = ends.map(([n]) => (roadDeg(n) === 1 ? 4.5 : 0));
+      strip(e, -ext[0], e.len + ext[1], 0, 9, L.road, new THREE.MeshLambertMaterial({ map: repeatTex(roadTex, 1, (e.len + ext[0] + ext[1]) / 12) }));
       for (const s of [-1, 1]) {
-        addStrip(x1, z1, x2, z2, 2.2, L, s * 5.6, 0.05, new THREE.MeshLambertMaterial({ map: repeatTex(paveTex, 0.65, L / 3.4) }));
-        addCurb(x1, z1, x2, z2, L, s * 4.55);
+        const tw = ends.map(([n, ux, uz]) => trimAt(n, e, ux, uz, s, [4.5, 5.6, 6.7], isRoad, () => 4.6));
+        const tc = ends.map(([n, ux, uz]) => trimAt(n, e, ux, uz, s, [4.55], isRoad, () => 4.5));
+        const t0 = roadDeg(e.a) === 1 ? -4.5 : tw[0], t1 = e.len - (roadDeg(e.c) === 1 ? -4.5 : tw[1]);
+        strip(e, t0, t1, s * 5.6, 2.2, L.sidewalk + (i % 6) * 0.2, new THREE.MeshLambertMaterial({ map: repeatTex(paveTex, 0.65, (t1 - t0) / 3.4) }));
+        curb(e, roadDeg(e.a) === 1 ? -4.5 : tc[0], e.len - (roadDeg(e.c) === 1 ? -4.5 : tc[1]), s * 4.55);
       }
-      edges.push({ x1, z1, x2, z2, half: 6.7, road: true });
     } else {
-      const L = len + 3.4;
-      addStrip(x1, z1, x2, z2, 3.4, L, 0, 0.045, new THREE.MeshLambertMaterial({ map: repeatTex(paveTex, 1, L / 3.4) }));
-      for (const s of [-1, 1]) addCurb(x1, z1, x2, z2, L, s * 1.75);
-      edges.push({ x1, z1, x2, z2, half: 1.9, road: false });
+      // cığır: yola çatanda asfaltın kənarında dayanır, başqa cığırla qovşaqda birləşir
+      const tr = ends.map(([n, ux, uz]) => {
+        if (inc[n].length === 1) return -1.7;
+        return trimAt(n, e, ux, uz, 1, [-1.7, 0, 1.7], isRoad, () => 4.6);
+      });
+      strip(e, tr[0], e.len - tr[1], 0, 3.4, L.path + (i % 4) * 0.2, new THREE.MeshLambertMaterial({ map: repeatTex(paveTex, 1, (e.len - tr[0] - tr[1]) / 3.4) }));
+      for (const s of [-1, 1]) {
+        const tc = ends.map(([n, ux, uz]) => (inc[n].length === 1 ? -1.7 : trimAt(n, e, ux, uz, s, [1.75], () => true, (o) => (o.road ? 6.7 : 1.8))));
+        curb(e, tc[0], e.len - tc[1], s * 1.75);
+      }
+    }
+  });
+  // qovşaq örtükləri
+  for (const n of Object.keys(inc)) {
+    const [x, z] = nodes[n];
+    if (roadDeg(n) >= 2 && !straightRoad(n)) {
+      disc(x, z, 7.2, L.junctionPave, new THREE.MeshLambertMaterial({ map: repeatTex(paveTex, 4, 4) }));
+      disc(x, z, 6.4, L.roadPatch, new THREE.MeshLambertMaterial({ map: repeatTex(asphTex, 1.6, 1.6) }));
+    } else if (roadDeg(n) === 0 && inc[n].length >= 2) {
+      disc(x, z, 2.45, L.pathPatch, new THREE.MeshLambertMaterial({ map: repeatTex(paveTex, 1.4, 1.4) }));
     }
   }
 

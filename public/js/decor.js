@@ -98,12 +98,16 @@ export function addDecor(scene, campus, ctx, R, quality) {
     for (let d = 8; d < len - 4; d += step) {
       const [x, z] = along(e, d, off * side);
       side = e.road ? side : -side;
-      if (ctx.colliders.some((c) => x > c.minX - 1 && x < c.maxX + 1 && z > c.minZ - 1 && z < c.maxZ + 1)) continue;
-      if (lampSpots.some(([lx, lz]) => Math.hypot(lx - x, lz - z) < 8)) continue;
-      lampSpots.push([x, z]);
+      const okLamp = (px, pz) =>
+        !ctx.colliders.some((c) => px > c.minX - 1 && px < c.maxX + 1 && pz > c.minZ - 1 && pz < c.maxZ + 1) &&
+        !lampSpots.some(([lx, lz]) => Math.hypot(lx - px, lz - pz) < 8) &&
+        // başqa yolun asfaltına və ya cığırın ortasına düşməsin
+        !edges.some((e2) => e2 !== e && segDist(px, pz, e2) < (e2.road ? 4.9 : 1.9)) &&
+        !(ctx.hardAreas || []).some((a) => a.type !== 'paving' && Math.abs(px - a.x) < a.w / 2 + 0.5 && Math.abs(pz - a.z) < a.d / 2 + 0.5);
+      if (okLamp(x, z)) lampSpots.push([x, z]);
       if (e.road) {
         const [x2, z2] = along(e, d + step / 2, -off);
-        if (!lampSpots.some(([lx, lz]) => Math.hypot(lx - x2, lz - z2) < 8)) lampSpots.push([x2, z2]);
+        if (okLamp(x2, z2)) lampSpots.push([x2, z2]);
       }
     }
   }
