@@ -958,7 +958,7 @@ function buildLetters(scene, L, colliders) {
   base.castShadow = base.receiveShadow = true;
   grp.add(base);
   grp.position.set(L.x, 0, L.z);
-  grp.rotation.y = L.ry ?? 0;   // -90°: hərflər meydana (-x) baxır, soldan sağa +z boyunca oxunur
+  grp.rotation.y = L.ry ?? 0;   // 180°: hərflər girişə (-z) baxır, soldan sağa -x boyunca oxunur
   scene.add(grp);
   // toqquşma (qrup fırlanmış ola bilər — dünya koordinatında qutu)
   const halfL = (total + 0.8) / 2, halfD = 0.55;
