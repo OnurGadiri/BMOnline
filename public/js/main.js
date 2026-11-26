@@ -8,6 +8,9 @@ import { makeSpeechBubble, makePistol } from './character.js';
 import { Fx, sfx, makeHpBar, aimPoint } from './combat.js';
 import { Minimap } from './minimap.js';
 import { Play, BALL_G } from './play.js';
+import { initTouch, touchInput, isTouchDevice } from './touch.js';
+
+const TOUCH = isTouchDevice();
 
 const $ = (id) => document.getElementById(id);
 const [OPTIONS, CAMPUS] = await Promise.all([
@@ -65,14 +68,16 @@ const keys = new Set();
 Object.assign(window.__bmu, { player, others, cam, renderer, scene, camera });
 
 // ---------- Ayarlar ----------
-const settings = Object.assign({ sens: 1, invert: false, lock: true, quality: 'high' }, JSON.parse(localStorage.getItem('bmu-settings') || '{}'));
+// telefonda: siçan kilidi yoxdur, keyfiyyət aşağı (istifadəçi ayarlarda dəyişə bilər)
+const settings = Object.assign({ sens: 1, invert: false, lock: !TOUCH, quality: TOUCH ? 'low' : 'high' }, JSON.parse(localStorage.getItem('bmu-settings') || '{}'));
+if (TOUCH) settings.lock = false;
 {
   const [size, area] = SHADOW[settings.quality] || SHADOW.high;
   sun.shadow.mapSize.set(size, size);
   Object.assign(sun.shadow.camera, { left: -area, right: area, top: area, bottom: -area, near: 1, far: 260 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
-  if (settings.quality === 'low') renderer.setPixelRatio(1);
+  if (settings.quality === 'low') renderer.setPixelRatio(TOUCH ? Math.min(1.5, window.devicePixelRatio) : 1);
 }
 function saveSettings() { localStorage.setItem('bmu-settings', JSON.stringify(settings)); }
 $('set-sens').value = settings.sens;
@@ -87,7 +92,18 @@ $('set-quality').onchange = (e) => { settings.quality = e.target.value; saveSett
 // Foto rejimi: interfeysi gizlədir — gözəl skrinşot üçün
 function togglePhotoMode() {
   document.body.classList.toggle('photo');
-  if (document.body.classList.contains('photo')) toast('📸 Foto rejimi — P ilə çıx');
+  if (!document.body.classList.contains('photo')) return;
+  toast(TOUCH ? '📸 Foto rejimi — çıxmaq üçün ekrana iki dəfə toxun' : '📸 Foto rejimi — P ilə çıx');
+  if (TOUCH) {
+    // telefonda bütün düymələr gizlənir — iki dəfə toxunmaqla çıxılır
+    let last = 0;
+    const exit = () => {
+      const now = performance.now();
+      if (now - last < 350) { document.body.classList.remove('photo'); window.removeEventListener('touchend', exit); }
+      last = now;
+    };
+    setTimeout(() => window.addEventListener('touchend', exit), 400);
+  }
 }
 $('btn-settings').onclick = () => { $('settings').hidden = !$('settings').hidden; };
 
@@ -344,6 +360,8 @@ function updateCombatHud() {
   $('hud-hp').style.background = hp > 50 ? '' : hp > 25 ? '#ffcc00' : '#ff3b30';
   $('hud-hp-text').textContent = `❤ ${hp}`;
   $('w-icon').textContent = player.weapon === 1 ? '🔫' : '👊';
+  const ta = document.getElementById('tbtn-attack');
+  if (ta) ta.textContent = player.weapon === 1 ? '🔫' : '👊';
   $('w-name').textContent = player.weapon === 1 ? 'Tapança' : 'Yumruq';
   $('w-ammo').textContent = player.weapon === 1 ? (player.reloading ? 'doldurulur…' : `${player.ammo} / ${MAG}`) : '';
   document.body.classList.toggle('aiming', player.weapon === 1 && !player.dead);
@@ -446,6 +464,7 @@ $('login-form').onsubmit = (e) => {
 function openCreator(first, mode = 'player') {
   if (document.pointerLockElement) document.exitPointerLock();
   keys.clear();
+  touchCtl?.reset();
   state.mode = 'creator';
   $('hud').hidden = true;
   creator.open(mode === 'dummy' ? null : state.appearance, { first, name: state.name, mode });
@@ -633,7 +652,8 @@ function rotateCamera(dx, dy) {
 }
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', (e) => {
-  if (state.mode !== 'game' || document.pointerLockElement === canvas) return;
+  // toxunmaları touch.js idarə edir (joystik + kamera), burada yalnız siçan
+  if (e.pointerType === 'touch' || state.mode !== 'game' || document.pointerLockElement === canvas) return;
   drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
   canvas.setPointerCapture(e.pointerId);
   document.body.classList.add('dragging-cam');
@@ -667,6 +687,15 @@ canvas.addEventListener('mousedown', (e) => {
 });
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
+// ---------- Mobil idarəetmə ----------
+const KEY_NAMES = { Space: ' ', Enter: 'Enter', Tab: 'Tab', Escape: 'Escape' };
+const touchCtl = TOUCH ? initTouch({
+  isGame: () => state.mode === 'game' && !gallows.open,
+  rotateCamera: (dx, dy) => rotateCamera(dx, dy),
+  attack: () => attack(),
+  key: (code, down) => window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: KEY_NAMES[code] || code.replace(/^Key|^Digit/, '').toLowerCase() })),
+}) : null;
+
 document.addEventListener('pointerlockerror', () => {
   // kilid alınmadısa, kilidsiz rejimə keç ki, klik atəş açsın
   settings.lock = false;
@@ -745,8 +774,15 @@ function updatePlayer(dt) {
     return;
   }
   root.rotation.x += (0 - root.rotation.x) * Math.min(1, dt * 8);
-  const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
-  const str = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+  let fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
+  let str = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+  // mobil joystik: analoq dəyər (kiçik ölü zona ilə)
+  let stickMag = 1;
+  if (touchInput.active && Math.hypot(touchInput.mx, touchInput.my) > 0.15) {
+    fwd = -touchInput.my;
+    str = touchInput.mx;
+    stickMag = Math.min(1, Math.hypot(fwd, str));
+  }
   // skamyada oturub: hərəkət düyməsi basılana qədər yerində qalır
   if (player.sitting) {
     if (fwd || str || keys.has('Space')) stand();
@@ -760,7 +796,7 @@ function updatePlayer(dt) {
   }
   const turn = (keys.has('KeyQ') ? 1 : 0) - (keys.has('KeyE') ? 1 : 0);
   if (turn) { cam.yaw += turn * 2.2 * dt; $('look-hint').classList.add('gone'); }
-  const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight') || (touchInput.active && touchInput.sprint);
   let mx = 0, mz = 0;
   if (fwd || str) {
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
@@ -770,7 +806,7 @@ function updatePlayer(dt) {
     const l = Math.hypot(mx, mz);
     mx /= l; mz /= l;
   }
-  const target = (mx || mz) ? (sprint && player.weapon !== 1 ? 7.5 : player.weapon === 1 ? 3.6 : 4) : 0;
+  const target = (mx || mz) ? (sprint && player.weapon !== 1 ? 7.5 : (player.weapon === 1 ? 3.6 : 4) * Math.max(0.35, stickMag)) : 0;
   // yumşaq sürətlənmə
   player.speed += (target - player.speed) * Math.min(1, dt * 10);
   if (mx || mz) { player.dirX = mx; player.dirZ = mz; }
@@ -974,6 +1010,7 @@ function loop() {
 window.__bmu.step = (dt = 1 / 60, n = 1) => { for (let i = 0; i < n; i++) { clock.elapsedTime += dt; frame(dt); } };
 
 function frame(dt) {
+  document.body.classList.toggle('in-creator', state.mode === 'creator');
   if (state.mode === 'creator') {
     creator.render(renderer, dt);
     return;

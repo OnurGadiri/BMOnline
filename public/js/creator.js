@@ -570,15 +570,20 @@ export class Creator {
     // kamera fokusunu yumşaq dəyiş
     const ft = this.focusTarget, k = Math.min(1, dt * 6);
     const s = this.app ? this.app.height : 1;
+    // Panel solda (kompüter, telefon yan) və ya aşağıda (telefon dik) ola bilər —
+    // xarakter qalan boş sahənin ortasında görünsün
+    const rect = this.panel.querySelector('.panel').getBoundingClientRect();
+    const bottomSheet = rect.width > w * 0.8;
+    const freeFrac = bottomSheet ? Math.max(0.3, 1 - rect.height / h) : 1;
     this.focus.y += (ft.y * s - this.focus.y) * k;
-    this.focus.dist += (ft.dist * this.zoom - this.focus.dist) * k;
+    this.focus.dist += ((ft.dist * this.zoom) / Math.max(0.42, freeFrac * 0.9) - this.focus.dist) * k;
     this.camera.aspect = w / h;
     this.camera.position.set(0, this.focus.y + 0.12, this.focus.dist);
     this.camera.lookAt(0, this.focus.y, 0);
     this.camera.updateProjectionMatrix();
-    // Panel solda olduğu üçün xarakteri qalan sahənin ortasına sürüşdür
-    const panelW = w > 600 ? this.panel.querySelector('.panel').offsetWidth + 16 : 0;
-    this.camera.projectionMatrix.elements[8] = -panelW / w;
+    const e = this.camera.projectionMatrix.elements;
+    e[8] = bottomSheet ? 0 : -Math.min(rect.right, w * 0.7) / w;
+    e[9] = bottomSheet ? -rect.height / h : 0;
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
 
     this.holder.rotation.y += this.spin * dt;

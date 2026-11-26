@@ -2,7 +2,10 @@
 <html lang="az">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#1b2838" />
   <title>BMU Online</title>
   <link rel="stylesheet" href="/style.css" />
   <script type="importmap">
@@ -115,6 +118,28 @@
       <button id="gp-create" type="button">➕ Yeni məhkum yarat</button>
       <p class="tip">Məhkum uydurma NPC-dir: görünüşünü özün qurursan, adını siyahıdan seçirsən. 2 dəqiqə qalır, istənilən oyunçu azad edə bilər. Yer doludursa, ən köhnəsi gedir.</p>
     </div>
+    <!-- Mobil idarəetmə (yalnız toxunma ekranlarında görünür) -->
+    <div id="touch" class="touch-ui" hidden>
+      <div id="stick" class="stick"><div id="stick-knob"></div></div>
+      <div class="stick-hint">← yeriş</div>
+      <div class="tbtns">
+        <button type="button" class="tbtn big" id="tbtn-attack" data-act="attack" aria-label="Vur">👊</button>
+        <button type="button" class="tbtn" data-key="Space" aria-label="Tullan">⤒</button>
+        <button type="button" class="tbtn act" data-key="KeyF" aria-label="İnteraksiya">F</button>
+        <button type="button" class="tbtn" data-key="KeyG" aria-label="Silahı dəyiş">⇄</button>
+        <button type="button" class="tbtn" data-key="KeyR" aria-label="Doldur">⟳</button>
+      </div>
+      <div class="ttop">
+        <button type="button" class="tbtn s" data-key="Enter" aria-label="Çat">💬</button>
+        <button type="button" class="tbtn s" data-key="KeyM" aria-label="Xəritə">🗺</button>
+        <button type="button" class="tbtn s" data-key="Tab" aria-label="Liderlər">🏆</button>
+        <button type="button" class="tbtn s" data-key="KeyC" aria-label="Xarakter">👕</button>
+        <button type="button" class="tbtn s" data-act="emotes" aria-label="Emosiyalar">😀</button>
+        <button type="button" class="tbtn s" data-key="KeyP" aria-label="Foto">📸</button>
+        <button type="button" class="tbtn s" data-act="fullscreen" aria-label="Tam ekran">⛶</button>
+      </div>
+    </div>
+    <div class="rotate-hint">📱 Telefonu yan çevirin — daha rahat oynanır</div>
     <div id="look-hint" class="look-hint">🖱 Kameranı çevirmək üçün siçanı <b>basıb sürüşdür</b> və ya ekrana klikləyib kilidlə</div>
     <div class="help">
       <b>WASD</b> gəz · <b>Shift</b> qaç · <b>Space</b> tullan · <b>Siçan</b> kamera · <b>Q/E</b> fırlat · <b>Təkər</b> zoom · <b>F</b> otur / topa vur · <b>Tab</b> liderlər · <b>G</b> silah · <b>Klik</b> vur · <b>R</b> doldur · <b>1-3</b> emosiya · <b>M</b> xəritə · <b>P</b> foto · <b>Enter</b> çat · <b>Esc</b> siçanı burax

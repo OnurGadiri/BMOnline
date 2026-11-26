@@ -122,6 +122,17 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 
 The ⚙ **Settings** panel has mouse sensitivity, invert Y, mouse-lock mode and graphics quality (High / Low).
 
+### Mobile (phones and tablets)
+
+Touch controls appear automatically on phones and tablets (landscape is recommended):
+
+- **Left side:** virtual joystick — push to the edge to sprint.
+- **Right side:** drag anywhere to turn the camera.
+- **Buttons:** 👊/🔫 attack, ⤒ jump, **F** interact (hold to charge kicks and shots), ⇄ switch weapon, ⟳ reload.
+- **Top bar:** 💬 chat, 🗺 map, 🏆 leaderboard (hold), 👕 character, 😀 emotes, 📸 photo mode (double-tap to exit), ⛶ fullscreen.
+- The character creator becomes a bottom sheet (portrait) or a side panel (landscape); graphics default to Low.
+- Add `?touch=1` to the URL to try the touch controls on a computer (`?touch=0` forces mouse controls).
+
 ## Tests
 
 ```bash
@@ -150,6 +161,7 @@ public/js/decor.js        Sky, clouds, grass, hedges, flowers, street lamps, roc
 public/js/combat.js       Combat effects, sounds, health bars, aim raycasting
 public/js/minimap.js      Minimap and full campus map
 public/js/play.js         Balls (client-side prediction) and collectible stars
+public/js/touch.js        Mobile touch controls (joystick, camera drag, on-screen buttons)
 public/js/merge.js        Merges static meshes into vertex-coloured batches (fewer draw calls)
 tests/                    Map validation and server protocol tests
 public/data/campus.json   Map data: buildings, paths / NPC navigation graph, spawn, static NPCs
