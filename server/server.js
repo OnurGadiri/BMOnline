@@ -11,6 +11,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const ROOT = path.join(__dirname, '..');
 const PUBLIC = path.join(ROOT, 'public');
 const VENDOR = path.join(ROOT, 'node_modules', 'three', 'build');
+const ADDONS = path.join(ROOT, 'node_modules', 'three', 'examples', 'jsm');
 const DATA_DIR = path.join(ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'players.json');
 
@@ -183,6 +184,7 @@ function serveFile(res, base, rel) {
 const server = http.createServer((req, res) => {
   const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (url.startsWith('/vendor/')) return serveFile(res, VENDOR, url.slice('/vendor/'.length));
+  if (url.startsWith('/addons/')) return serveFile(res, ADDONS, url.slice('/addons/'.length));
   serveFile(res, PUBLIC, url === '/' ? 'index.html' : url.slice(1));
 });
 

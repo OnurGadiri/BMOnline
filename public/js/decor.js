@@ -1,5 +1,6 @@
 // Vizual detallar: səma, buludlar, ot, kollar, çiçəklər, fənərlər, daşlar
 import * as THREE from 'three';
+import { bakeGeometry, mergeGeometries } from './merge.js';
 
 export const SUN_DIR = new THREE.Vector3(0.45, 0.72, 0.28).normalize();
 
@@ -57,6 +58,10 @@ export function buildClouds(scene, R) {
       m.position.set((j - n / 2) * 8 + R() * 4, R() * 3, R() * 6 - 3);
       c.add(m);
     }
+    // buludun parçalarını bir mesh-də birləşdir
+    const geos = c.children.map((m) => { m.updateMatrix(); return bakeGeometry(m.geometry, m.matrix, null); });
+    c.clear();
+    c.add(new THREE.Mesh(mergeGeometries(geos, false), mat));
     const ang = R() * Math.PI * 2, rad = 150 + R() * 400;
     c.position.set(Math.cos(ang) * rad, 95 + R() * 60, Math.sin(ang) * rad + 80);
     c.rotation.y = R() * Math.PI;

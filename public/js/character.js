@@ -1,6 +1,7 @@
 // Stilizə edilmiş xarakter modeli (toon shading).
 // Görünüş (appearance) obyektindən 3D model + animasiya skeleti qurur.
 import * as THREE from 'three';
+import { bakeGeometry, mergeGeometries } from './merge.js';
 
 let DEFAULTS = {};
 export function setCharacterDefaults(d) { DEFAULTS = { ...d }; }
@@ -441,8 +442,25 @@ export function buildCharacter(input) {
     armL: arms[0], armR: arms[1], elbowL: elbows[0], elbowR: elbows[1], handR: hands[1],
     phase: Math.random() * 6, t: Math.random() * 10, blink: 2 + Math.random() * 3,
   };
+  mergeRig(root);
   const top = hipY + 0.04 + torsoH + 0.08 + hh * a.headSize + 0.08;
   return { root, rig, height: top * a.height, headY: (hipY + torsoH + 0.25) * a.height };
+}
+
+// Hər sümük qrupunun sadə rəngli hissələrini bir mesh-ə birləşdirir (xarakter başına ~54 → ~15 çəkiliş)
+const toonVertexMat = new THREE.MeshToonMaterial({ color: '#ffffff', gradientMap: toonGradient, vertexColors: true });
+function mergeRig(root) {
+  const groups = [];
+  root.traverse((o) => { if (!o.isMesh && !o.isSprite) groups.push(o); });
+  for (const g of groups) {
+    const parts = g.children.filter((c) => c.isMesh && c.material.isMeshToonMaterial && !c.material.map && !c.material.transparent && !c.material.vertexColors);
+    if (parts.length < 2) continue;
+    const geos = parts.map((p) => { p.updateMatrix(); return bakeGeometry(p.geometry, p.matrix, p.material.color); });
+    for (const p of parts) g.remove(p);
+    const mesh = new THREE.Mesh(mergeGeometries(geos, false), toonVertexMat);
+    mesh.castShadow = true;
+    g.add(mesh);
+  }
 }
 
 function buildShoe(foot, a, shoeM, fem) {

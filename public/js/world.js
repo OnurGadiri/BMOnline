@@ -1,6 +1,9 @@
 // Kampus xəritəsi — public/data/campus.json əsasında qurulur
 import * as THREE from 'three';
 import { buildSky, buildClouds, addDecor } from './decor.js';
+import { mergeStatic, mergeGroup } from './merge.js';
+
+const markDynamic = (o) => o.traverse((c) => { c.userData.dynamic = true; });
 
 // Sabit toxumlu təsadüfi ədəd (hər kəsdə eyni düzüm olsun)
 function rng(seed) {
@@ -355,7 +358,7 @@ function beuFlagTexture() {
 // ======================= Kömək edən modellər =======================
 
 const CAR_COLORS = ['#e63946', '#f1faee', '#1d3557', '#222222', '#8d99ae', '#ffd166', '#c0c4c9', '#ffffff', '#5a6b7c'];
-function makeCar(color) {
+function makeCar(color, lit = false) {
   const car = new THREE.Group();
   const cm = new THREE.MeshLambertMaterial({ color });
   const lower = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.75, 4.3), cm);
@@ -364,7 +367,8 @@ function makeCar(color) {
   upper.position.set(0, 1.25, -0.2);
   const glass = new THREE.Mesh(new THREE.BoxGeometry(1.77, 0.45, 2.1), lambert('#22313f'));
   glass.position.set(0, 1.27, -0.2);
-  const lights = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.18, 0.05), new THREE.MeshLambertMaterial({ color: '#fff6d0', emissive: '#fff0b0', emissiveIntensity: 0.5 }));
+  const lights = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.18, 0.05),
+    lit ? new THREE.MeshLambertMaterial({ color: '#fff6d0', emissive: '#fff0b0', emissiveIntensity: 0.5 }) : lambert('#f4ecd0'));
   lights.position.set(0, 0.75, 2.16);
   car.add(lower, upper, glass, lights);
   const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.28, 12);
@@ -400,7 +404,7 @@ export function buildWorld(scene, campus, quality = 'high') {
   const colliders = [];   // AABB: {minX,maxX,minZ,maxZ,h}
   const circles = [];     // {x,z,r}
   const blockers = [];    // kameranın keçə bilmədiyi meshlər
-  const animated = [];    // hər kadr yenilənən obyektlər
+  const before = new Set(scene.children); // birləşdirmə yalnız dünyaya aid obyektlərə tətbiq olunsun
   const R = rng(20261126);
   const b = campus.bounds;
   const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
@@ -708,6 +712,10 @@ export function buildWorld(scene, campus, quality = 'high') {
     circles.some((c) => Math.hypot(x - c.x, z - c.z) < c.r + m);
   plantTrees(scene, campus, edges, blocked, circles, R);
 
+  // --- Hərəkətsiz obyektləri birləşdir (çəkiliş sayı azalsın) ---
+  const stats = mergeStatic(scene, scene.children.filter((c) => !before.has(c)));
+  console.info(`[world] ${stats.merged} mesh → ${stats.meshes} birləşmiş mesh`);
+
   // --- Səma, buludlar, kollar, çiçəklər, fənərlər, ot ---
   const sky = buildSky(scene);
   const updateClouds = buildClouds(scene, R);
@@ -932,6 +940,8 @@ function buildCrane(scene, c) {
   hook.position.set(0, -17.4, 28);
   top.add(jib, counter, weight, cab, peak, cable, hook);
   top.traverse((o) => { o.castShadow = true; });
+  mergeGroup(top);
+  markDynamic(top);
   scene.add(top);
   return top;
 }
@@ -977,10 +987,11 @@ function buildHighway(scene, hw, R) {
   const cars = [];
   for (let i = 0; i < 12; i++) {
     const dir = i % 2 ? 1 : -1;
-    const car = makeCar(CAR_COLORS[Math.floor(R() * CAR_COLORS.length)]);
+    const car = mergeGroup(makeCar(CAR_COLORS[Math.floor(R() * CAR_COLORS.length)], true));
+    markDynamic(car);
     car.position.set(hw.minX + R() * len, 0, hw.z + dir * 2.5);
     car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
-    car.userData = { dir, speed: 12 + R() * 8 };
+    Object.assign(car.userData, { dir, speed: 12 + R() * 8 });
     scene.add(car);
     cars.push(car);
   }

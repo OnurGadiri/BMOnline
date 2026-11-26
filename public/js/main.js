@@ -58,7 +58,7 @@ const MAG = 12;
 const others = new Map(); // id -> { char, tag, target, ry, moving, emote, online, appKey, level, name }
 const cam = { yaw: 0, pitch: 0.3, dist: 6, curDist: 6 };
 const keys = new Set();
-Object.assign(window.__bmu, { player, others, cam });
+Object.assign(window.__bmu, { player, others, cam, renderer, scene, camera });
 
 // ---------- Ayarlar ----------
 const settings = Object.assign({ sens: 1, invert: false, lock: true, quality: 'high' }, JSON.parse(localStorage.getItem('bmu-settings') || '{}'));
