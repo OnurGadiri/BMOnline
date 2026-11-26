@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "start": "node server/server.js",
-    "test": "node tests/protocol.test.js"
+    "test": "node tests/map.test.js && node tests/protocol.test.js",
+    "test:map": "node tests/map.test.js"
   },
   "dependencies": {
     "three": "^0.170.0",
