@@ -23,7 +23,7 @@ export class Minimap {
     const g = cv.getContext('2d');
     g.fillStyle = '#5f8f4e';
     g.fillRect(0, 0, cv.width, cv.height);
-    const areaCol = { meadow: '#8a8f5a', garden: '#4f8a43', asphalt: '#6b6e73', paving: '#b9b2a4', parking: '#5f6267', field: '#2f8a45', court: '#3f7fb0', volley: '#8a8c8f' };
+    const areaCol = { meadow: '#8a8f5a', garden: '#4f8a43', asphalt: '#6b6e73', paving: '#b9b2a4', dirt: '#a89377', parking: '#5f6267', field: '#2f8a45', court: '#3f7fb0', volley: '#8a8c8f' };
     for (const a of c.areas || []) {
       g.fillStyle = areaCol[a.type] || '#777';
       g.fillRect(this.lx(a.x - a.w / 2), this.lz(a.z - a.d / 2), a.w * PX, a.d * PX);
@@ -60,6 +60,14 @@ export class Minimap {
       g.fillStyle = '#6e4a2a';
       const w = c.crucifix.slots * c.crucifix.slotGap + 2;
       g.fillRect(this.lx(c.crucifix.x - w / 2), this.lz(c.crucifix.z - 2), w * PX, 4 * PX);
+    }
+    // Prefabrik 1-in qarşısı: Tüstüxana, pavilyonlar, köşklər
+    const sa = c.smokeArea;
+    if (sa) {
+      const sq = (x, z, w, d, col) => { g.fillStyle = col; g.fillRect(this.lx(x - w / 2), this.lz(z - d / 2), w * PX, d * PX); };
+      if (sa.hut) sq(sa.hut.x, sa.hut.z, sa.hut.w, sa.hut.d, '#86b394');
+      for (const p of sa.gazebos || []) sq(p.x, p.z, 4.4, 4.4, '#86b394');
+      for (const k of sa.kiosks || []) sq(k.x, k.z, 3.2, 3.2, '#ecebe6');
     }
     return cv;
   }
@@ -111,6 +119,7 @@ export class Minimap {
       g.fillStyle = '#ffcf9a';
       if (this.c.gallows) g.fillText('Dar ağacı', sx(this.c.gallows.x), sz(this.c.gallows.z) - 10);
       if (this.c.crucifix) g.fillText('Çarmıx', sx(this.c.crucifix.x), sz(this.c.crucifix.z) + 18);
+      if (this.c.smokeArea?.hut) g.fillText('🚬 ' + (this.c.smokeArea.name || 'Tüstüxana'), sx(this.c.smokeArea.hut.x), sz(this.c.smokeArea.hut.z) - 10);
     }
     // ulduzlar
     for (const s of stars?.values() || []) {

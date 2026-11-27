@@ -431,3 +431,8 @@ body.photo .lock-hint, body.minimal-ui .lock-hint { display: none; }
 body.shielded .weapon-hud { box-shadow: 0 0 0 2px #8ae6a2aa inset; }
 body.shielded .weapon-hud small { display: none; }
 body.touch #btn-safe, body.photo #btn-safe, body.minimal-ui #btn-safe { display: none; }
+
+/* 🚬 Tüstüxana */
+.smoke-chip { bottom: 165px; background: #5b4a3add; }
+body.touch .smoke-chip { top: 140px; bottom: auto; }
+body.photo .smoke-chip { display: none !important; }

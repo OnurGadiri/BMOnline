@@ -4,7 +4,7 @@ import { buildCharacter, animateRig, makeNameTag, setCharacterDefaults } from '.
 import { buildWorld, resolveCollisions, gallowsSlot, crucifixSlot } from './world.js';
 import { Creator } from './creator.js';
 import { SUN_DIR } from './decor.js';
-import { makeSpeechBubble, makePistol } from './character.js';
+import { makeSpeechBubble, makePistol, makeCigarette } from './character.js';
 import { Fx, sfx, makeHpBar, aimPoint } from './combat.js';
 import { Minimap } from './minimap.js';
 import { Play, BALL_G } from './play.js';
@@ -402,6 +402,104 @@ function attachGun(holder, on) {
     holder.gunMesh = null;
   }
 }
+// ---------- 🚬 Tüstüxana: siqaret yalnız Prefabrik 1-in yanındakı zonada (server də yoxlayır) ----------
+const SMOKE_ZONE = CAMPUS.smokeArea?.zone || null;
+const inSmokeZone = (p) => !!SMOKE_ZONE && Math.hypot(p.x - SMOKE_ZONE.x, p.z - SMOKE_ZONE.z) < SMOKE_ZONE.r;
+function toggleSmoke() {
+  if (state.mode !== 'game' || player.dead) return;
+  if (player.smoking) return stopSmoking('🚬 Siqareti söndürdün.');
+  if (!inSmokeZone(player.pos)) return toast('🚬 Siqareti yalnız Tüstüxanada (Prefabrik 1-in yanında) çəkmək olar.');
+  if (player.weapon) setWeapon(0);
+  player.smoking = true;
+  player.emote = player.sitting ? 15 : player.speed > 0.3 ? 0 : 14;
+  toast('🚬 Siqaret yandırdın — K ilə söndür.');
+}
+function stopSmoking(msg) {
+  player.smoking = false;
+  if (player.emote === 14) player.emote = 0;
+  if (player.emote === 15) player.emote = 5;
+  if (msg) toast(msg);
+}
+function updateSmoking(dt) {
+  if (player.smoking) {
+    if (player.dead || !inSmokeZone(player.pos)) stopSmoking(player.dead ? '' : '🚬 Tüstüxanadan çıxdın — siqareti söndürdün.');
+    else if (player.sitting) { if (player.emote === 5) player.emote = 15; }
+    else if (player.emote === 0 && player.speed < 0.3 && player.onGround) player.emote = 14; // dayananda yenə çəkir
+  }
+  smokeHolder(player, player.dead ? 0 : player.emote, dt, true);
+  updateSmokeFx(dt);
+  const chip = $('smoke-chip');
+  const show = state.mode === 'game' && !player.dead && (player.smoking || inSmokeZone(player.pos));
+  if (chip.hidden === show) chip.hidden = !show;
+  const txt = player.smoking ? '🚬 Söndür (K)' : '🚬 Siqaret çək (K)';
+  if (show && chip.dataset.t !== txt) { chip.dataset.t = txt; chip.textContent = txt; }
+}
+// tüstü: yumşaq, yuxarı qalxıb genişlənən və sönən spraytlar (hovuzla)
+const smokeTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  gr.addColorStop(0, 'rgba(240,240,240,0.95)');
+  gr.addColorStop(1, 'rgba(240,240,240,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+const smokeFx = { pool: [], live: [] };
+function puff(pos, vx, vy, vz, size, life, alpha) {
+  let sp = smokeFx.pool.pop();
+  if (!sp) {
+    if (smokeFx.live.length > 160) return;
+    sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, depthWrite: false, color: '#c9c9c9' }));
+  }
+  sp.position.copy(pos);
+  sp.userData = { vx, vy, vz, size, life, age: 0, alpha, ph: Math.random() * 6 };
+  sp.scale.setScalar(size);
+  sp.material.opacity = alpha;
+  scene.add(sp);
+  smokeFx.live.push(sp);
+}
+function updateSmokeFx(dt) {
+  for (let i = smokeFx.live.length - 1; i >= 0; i--) {
+    const sp = smokeFx.live[i], u = sp.userData;
+    u.age += dt;
+    if (u.age >= u.life) { scene.remove(sp); smokeFx.live.splice(i, 1); smokeFx.pool.push(sp); continue; }
+    const k = u.age / u.life;
+    sp.position.x += (u.vx + Math.sin(u.age * 2.6 + u.ph) * 0.06) * dt;
+    sp.position.y += u.vy * dt;
+    sp.position.z += (u.vz + Math.cos(u.age * 2.1 + u.ph) * 0.06) * dt;
+    u.vx *= 1 - dt * 1.5; u.vz *= 1 - dt * 1.5;
+    sp.scale.setScalar(u.size * (1 + k * 3.5));
+    sp.material.opacity = u.alpha * (1 - k) * Math.min(1, u.age * 6);
+  }
+}
+const smokeV = new THREE.Vector3(), smokeF = new THREE.Vector3();
+/** Əldə siqaret (emosiya 14/15) və ondan çıxan tüstü; ağızdan vaxtaşırı tüstü buraxılır */
+function smokeHolder(h, emote, dt, near) {
+  const want = (emote === 14 || emote === 15) && near && !!h.char;
+  if (want && !h.cigMesh) { h.cigMesh = makeCigarette(); h.char.rig.handR.add(h.cigMesh); }
+  else if (!want && h.cigMesh) { h.cigMesh.parent?.remove(h.cigMesh); h.cigMesh = null; }
+  if (!h.cigMesh) { h.lastU = undefined; return; }
+  h.smokeAcc = (h.smokeAcc || 0) + dt;
+  if (h.smokeAcc > 0.28) {
+    h.smokeAcc = 0;
+    h.cigMesh.userData.tip.getWorldPosition(smokeV);
+    puff(smokeV, 0, 0.32, 0, 0.07, 2.4, 0.5);
+  }
+  const u = h.char.rig.smokeU ?? 0;
+  if (h.lastU !== undefined && h.lastU < 2.15 && u >= 2.15) {
+    // ağızdan tüstü buraxır
+    h.char.rig.head.getWorldPosition(smokeV);
+    const ry = h.char.root.rotation.y;
+    smokeF.set(Math.sin(ry), 0, Math.cos(ry));
+    smokeV.addScaledVector(smokeF, 0.14);
+    smokeV.y += 0.02;
+    for (let i = 0; i < 10; i++) puff(smokeV, smokeF.x * (0.35 + i * 0.07), 0.18 + i * 0.03, smokeF.z * (0.35 + i * 0.07), 0.14, 2.8, 0.7);
+  }
+  h.lastU = u;
+}
+
 // ---------- 🛡 Qoruma: təhlükəsiz rejim, matç, imtahan otağı (server də eyni qaydanı yoxlayır) ----------
 const SHIELD_TEXT = {
   safe: { name: 'Təhlükəsiz rejim', msg: '🛡 Təhlükəsiz rejimdəsən — silah yoxdur (B ilə söndür).' },
@@ -437,6 +535,7 @@ function setWeapon(w) {
   if (player.dead) return;
   const sh = w === 1 && myShield();
   if (sh) { shieldToast(sh); return; }
+  if (w === 1 && player.smoking) stopSmoking('');
   player.weapon = w;
   player.emote = 0;
   attachGun(player, w === 1);
@@ -724,6 +823,7 @@ function updateStaticNpcs(dt, t) {
 function setPlayerModel(a) {
   if (player.char) scene.remove(player.char.root);
   player.gunMesh = null;
+  player.cigMesh = null;
   player.char = buildCharacter(a);
   scene.add(player.char.root);
   player.char.rig.head.visible = !cam.fp;
@@ -749,6 +849,7 @@ function upsertEntity(e) {
     o.tagKey = null;
     o.tag = null;
     o.gunMesh = null;
+    o.cigMesh = null;
     o.hpBar = makeHpBar();
     o.hpBar.position.y = o.char.height + 0.64;
     o.char.root.add(o.hpBar);
@@ -814,6 +915,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyU') { setMinimal(!document.body.classList.contains('minimal-ui')); return; }
   if (e.code === 'KeyT') { toggleTeleport(); return; }
   if (e.code === 'KeyB') { if (!e.repeat) toggleSafe(); return; }
+  if (e.code === 'KeyK') { if (!e.repeat) toggleSmoke(); return; }
   if (e.code === 'Space') e.preventDefault();
   keys.add(e.code);
 });
@@ -833,6 +935,7 @@ const EMOTES = [
 ];
 function setEmote(n) {
   if (player.sitting || player.dead) return;
+  if (player.smoking) stopSmoking('');
   player.emote = player.emote === n ? 0 : n;
   if (player.emote && player.weapon) setWeapon(0);
   updateEmoteBar();
@@ -1095,7 +1198,7 @@ function updatePlayer(dt) {
     else {
       root.position.copy(player.pos);
       root.rotation.y = player.ry;
-      animateRig(player.char.rig, dt, 0, { emote: player.emote === 13 ? 13 : 5 });
+      animateRig(player.char.rig, dt, 0, { emote: player.emote === 13 || player.emote === 15 ? player.emote : 5 });
       sendPos(dt, false);
       return;
     }
@@ -1191,7 +1294,7 @@ function sit(seat) {
   player.ry = seat.ry;
   player.vy = 0;
   player.speed = 0;
-  player.emote = 5;
+  player.emote = player.smoking ? 15 : 5;
 }
 function stand() {
   const s = player.sitting;
@@ -1225,6 +1328,8 @@ function kickBall(b, p) {
   if (!b || player.dead || Math.hypot(b.px - player.pos.x, b.pz - player.pos.z) > (vb ? 2.7 : 2.3)) return;
   if (!canKickBall(b)) return; // server onsuz da rədd edir — top yerli olaraq tərpənib geri sıçramasın
   b.kickBy = state.myId; b.kickAt = performance.now();
+  // server vurulan topu yerdən 5 sm qaldırır — trayektoriya da həmin nöqtədən hesablanmalıdır (yoxsa atış uzun düşür)
+  if (b.py < b.cfg.r + 0.05) b.py = b.cfg.r + 0.05;
   let v;
   if (vb) {
     // tora doğru hündür qövs; güc uçuş məsafəsini təyin edir
@@ -1247,7 +1352,6 @@ function kickBall(b, p) {
   }
   send({ t: 'kick', id: b.cfg.id, v: v.map((x) => +x.toFixed(3)) });
   [b.vx, b.vy, b.vz] = v; // dərhal yerli təsir, server sonra təsdiqləyir
-  if (b.py < b.cfg.r + 0.05) b.py = b.cfg.r + 0.05;
   player.punchT = 0.001;
   player.ry = Math.atan2(v[0], v[2]);
   sfx.kick(1);
@@ -1326,6 +1430,7 @@ function openMatchPanel() {
 function closeMatchPanel() { mpanel.open = false; $('match-panel').hidden = true; }
 $('mp-close').onclick = closeMatchPanel;
 $('mchip').onclick = () => (mpanel.open ? closeMatchPanel() : openMatchPanel());
+$('smoke-chip').onclick = (ev) => { ev.currentTarget.blur(); toggleSmoke(); };
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -1508,6 +1613,7 @@ function updateOthers(dt) {
     const d2 = r.position.distanceToSquared(camera.position);
     const far = LOD.hide * LOD.hide;
     r.visible = d2 < far;
+    smokeHolder(o, o.dead ? 0 : o.emote, dt, r.visible && d2 < 45 * 45);
     if (!r.visible) continue;
     o.animAcc = (o.animAcc || 0) + dt;
     const every = d2 > LOD.slow * LOD.slow ? 3 : d2 > (LOD.slow * 0.5) ** 2 ? 2 : 1;
@@ -1548,6 +1654,7 @@ function frame(dt) {
     return;
   }
   updatePlayer(dt);
+  updateSmoking(dt);
   updateOthers(dt);
   animateDummies(dt);
   updateStaticNpcs(dt, clock.elapsedTime);

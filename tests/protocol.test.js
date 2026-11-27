@@ -244,10 +244,12 @@ async function enter(name, pin = '1234') {
   A.c.send({ t: 'kick', id: 'basket', v: [0, 100, 0] });
   ok('topun sürəti məhdudlaşdırılır (hiylə qorunması)', !(await bTooFast));
   // dəqiq atış (klientin istifadə etdiyi basketAim) serverdə çənbər/lövhə fizikası ilə səbətə düşür
-  // yuxarı atılan top yerə düşüb dayansın (0.7 san ərzində hərəkət xəbəri gəlmirsə — dayanıb)
-  for (const until = Date.now() + 15000; Date.now() < until;) {
-    const mv = await A.c.waitT('balls', 700, (m) => { const r = m.b.find((x) => x[0] === 'basket'); return r && Math.hypot(r[4], r[5], r[6]) > 0.02; });
-    if (!mv) break;
+  // yuxarı atılan top (20 m/s) ~12 san sıçrayır — tam dayanana qədər gözlə: yerdədir və sürəti 0-dır
+  // (dayanmış top saniyədə bir göndərilir; sıçrayan topdan hesablanan atış alçaqdan başlayıb ön çənbərə dəyir)
+  const lastBasket = () => A.c.msgs.filter((m) => m.t === 'balls').pop()?.b.find((r) => r[0] === 'basket');
+  for (const until = Date.now() + 25000; Date.now() < until; await sleep(300)) {
+    const r = lastBasket();
+    if (r && r[4] === 0 && r[5] === 0 && r[6] === 0 && r[2] < 0.14) break;
   }
   const bNow = A.c.msgs.filter((m) => m.t === 'balls').pop().b.find((r) => r[0] === 'basket');
   A.c.pos = await A.c.walkTo(A.c.pos, { x: bNow[1] - 0.8, z: bNow[3] }, 8.5);
@@ -255,7 +257,7 @@ async function enter(name, pin = '1234') {
   const { basketAim } = require(path.join(__dirname, '..', 'public', 'js', 'ballphys.js'));
   const hoopCfg = require(path.join(__dirname, '..', 'public', 'data', 'campus.json')).balls.find((b) => b.id === 'basket').hoop;
   const made = A.c.waitT('score', 3500, (m) => m.kind === 'basket' && m.ball === 'basket');
-  A.c.send({ t: 'kick', id: 'basket', v: basketAim({ px: bNow[1], py: bNow[2], pz: bNow[3] }, hoopCfg, 0.5, () => 0.5).map((x) => +x.toFixed(3)) });
+  A.c.send({ t: 'kick', id: 'basket', v: basketAim({ px: bNow[1], py: Math.max(bNow[2], 0.12 + 0.05), pz: bNow[3] }, hoopCfg, 0.5, () => 0.5).map((x) => +x.toFixed(3)) });
   ok('dəqiq basketbol atışı serverdə səbət sayılır', (await made)?.by === 'Alfa', `top (${bNow[1].toFixed(1)}, ${bNow[3].toFixed(1)})`);
   // uzaqdakı futbol topuna vurmaq olmur
   const fb = A.c.waitT('balls', 800, (m) => { const r = m.b.find((x) => x[0] === 'football'); return r && Math.hypot(r[4], r[6]) > 1; });
@@ -518,6 +520,29 @@ async function enter(name, pin = '1234') {
     Y.c.send({ t: 'match', act: 'leave', id: 'football' });
     await endM;
     S.c.close(); T.c.close(); Y.c.close();
+    await sleep(300);
+  }
+
+  // --- 8f. 🚬 Tüstüxana: siqaret yalnız Prefabrik 1-in yanındakı zonada ---
+  {
+    const D = await enter('Delta');
+    const zone = require(path.join(__dirname, '..', 'public', 'data', 'campus.json')).smokeArea.zone;
+    const emoteOf = async () => {
+      const sn = await A.c.waitT('snap', 1500, (m) => m.e.some((r) => r[0] === 'delta'));
+      return sn?.e.find((r) => r[0] === 'delta')?.[6];
+    };
+    const far = Math.hypot(D.c.pos.x - zone.x, D.c.pos.z - zone.z);
+    D.c.send({ t: 'pos', x: D.c.pos.x, y: 0, z: D.c.pos.z, ry: 0, m: 0, e: 14, w: 0 });
+    await sleep(250);
+    ok('Tüstüxanadan uzaqda siqaret çəkmək olmur', far > zone.r + 2 && (await emoteOf()) === 0, `${far.toFixed(0)} m`);
+    D.c.pos = await D.c.walkTo(D.c.pos, { x: zone.x, z: zone.z + 1 }, 8.5);
+    D.c.send({ t: 'pos', x: D.c.pos.x, y: 0, z: D.c.pos.z, ry: 0, m: 0, e: 14, w: 0 });
+    await sleep(250);
+    ok('Tüstüxanada siqaret çəkmək olur', (await emoteOf()) === 14);
+    D.c.send({ t: 'pos', x: D.c.pos.x, y: 0, z: D.c.pos.z, ry: 0, m: 0, e: 15, w: 0 });
+    await sleep(250);
+    ok('Tüstüxanada skamyada oturub siqaret çəkmək olur', (await emoteOf()) === 15);
+    D.c.close();
     await sleep(300);
   }
 

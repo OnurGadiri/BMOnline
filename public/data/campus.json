@@ -37,6 +37,7 @@
     { "type": "field", "x": 48, "z": 30, "w": 38, "d": 62 },
     { "type": "court", "x": -14, "z": 374, "w": 26, "d": 20 },
     { "type": "paving", "x": 14, "z": -7, "w": 26, "d": 8 },
+    { "type": "dirt", "x": 48, "z": -23.5, "w": 39, "d": 38 },
     { "type": "paving", "x": 2, "z": 398, "w": 50, "d": 14 }
   ],
 
@@ -103,6 +104,7 @@
     { "id": "court", "name": "🏐 Voleybol / basketbol", "x": 58, "z": -242 },
     { "id": "gallows", "name": "⚖ Dar ağacı və çarmıx", "x": -84, "z": -130 },
     { "id": "newbld", "name": "🏢 Yeni bina", "x": 2, "z": 15 },
+    { "id": "smoke", "name": "🚬 Tüstüxana (Prefabrik 1)", "x": 17.3, "z": -42.4 },
     { "id": "south", "name": "🏫 Cənub korpusu", "x": -6, "z": 250 },
     { "id": "lang", "name": "🗣 Dillər korpusu", "x": 28, "z": 370 },
     { "id": "econ", "name": "💼 İqtisadiyyat korpusu", "x": -212, "z": -140 },
@@ -129,6 +131,15 @@
     }
   ],
   "stars": { "count": 18 },
+  "smokeArea": {
+    "_note": "Prefabrik 1-in qarşısı: Tüstüxana (siqaret yalnız zone daxilində), yol boyu yaşıl pavilyonlar və ağ damlı köşklər",
+    "name": "Tüstüxana",
+    "zone": { "x": 15, "z": -38.5, "r": 8 },
+    "hut": { "x": 13.5, "z": -39.8, "w": 5.2, "d": 4.2, "face": -1 },
+    "gazebos": [{ "x": 31.5, "z": -38.5 }, { "x": 51, "z": -38.5 }],
+    "kiosks": [{ "x": 38, "z": -39 }, { "x": 44.5, "z": -39 }, { "x": 60, "z": -19 }],
+    "outside": { "bench": [19.5, -40.2, 3.1416], "bins": [[17.6, -38.2], [9.0, -41.6]] }
+  },
   "gallows": { "x": -92, "z": -140, "platformH": 1.4, "slots": 3, "slotGap": 1.9 },
   "crucifix": { "x": -105, "z": -140, "slots": 3, "slotGap": 3.4, "footH": 1.0 },
   "npcs": [

@@ -26,7 +26,7 @@ const lambert = (c) => new THREE.MeshLambertMaterial({ color: c });
 
 // Yer səthi qatları: üst-üstə düşən düz səthlər bu sıra ilə çəkilir (z-fighting / titrəmə olmasın)
 const L = {
-  grass: 0, meadow: 1, garden: 2, asphalt: 3, paving: 3, parking: 4, field: 4, court: 4, volley: 4, round: 9,
+  grass: 0, meadow: 1, garden: 2, dirt: 2, asphalt: 3, paving: 3, parking: 4, field: 4, court: 4, volley: 4, round: 9,
   junctionPave: 5, road: 6, roadPatch: 7, sidewalk: 8, path: 10, pathPatch: 11,
 };
 const layerY = (layer) => 0.004 + layer * 0.004;
@@ -245,6 +245,21 @@ function meadowTexture() {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
+/** Tapdanmış torpaq sahə (Prefabrik 1-in qarşısı): qəhvəyi-boz, ot ləkələri və izlər */
+function dirtTexture() {
+  const t = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#a89377';
+    g.fillRect(0, 0, w, h);
+    const R = rng(77);
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = R() < 0.35 ? 'rgba(110,125,70,0.22)' : R() < 0.6 ? 'rgba(90,75,55,0.18)' : 'rgba(200,185,160,0.2)';
+      g.beginPath(); g.ellipse(R() * w, R() * h, 10 + R() * 40, 6 + R() * 22, R() * 3, 0, Math.PI * 2); g.fill();
+    }
+    speckle(g, w, h, R, 5000, ['#9a8468', '#b5a184', '#8d7a60', '#c2b091', '#7f8a5a'], 3);
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
 function asphaltTexture() {
   const t = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = '#62656a';
@@ -443,7 +458,7 @@ export function buildWorld(scene, campus, quality = 'high') {
 
   // --- Sahələr (çəmənlik, asfalt, bağ, dayanacaq, meydança) ---
   const tex = {
-    meadow: meadowTexture(), garden: grassTexture('#6aa553', ['#5e9a4a', '#77b35f', '#629f4e']),
+    meadow: meadowTexture(), dirt: dirtTexture(), garden: grassTexture('#6aa553', ['#5e9a4a', '#77b35f', '#629f4e']),
     asphalt: asphaltTexture(), paving: pavingTexture(), parking: parkingTexture(),
   };
   const hardAreas = [];
@@ -458,7 +473,7 @@ export function buildWorld(scene, campus, quality = 'high') {
       if (a.rows === 'z') { t.center.set(0.5, 0.5); t.rotation = Math.PI / 2; t.repeat.set(along / 11.2, across / 12); }
       mat = new THREE.MeshLambertMaterial({ map: t });
     } else {
-      const s = a.type === 'paving' ? 3.4 : 8;
+      const s = a.type === 'paving' ? 3.4 : a.type === 'dirt' ? 10 : 8;
       mat = new THREE.MeshLambertMaterial({ map: repeatTex(tex[a.type] || tex.asphalt, a.w / s, a.d / s) });
     }
     const layer = L[a.type] ?? L.asphalt;
@@ -815,6 +830,7 @@ export function buildWorld(scene, campus, quality = 'high') {
   // --- Dar ağacı və çarmıx ---
   if (campus.gallows) buildGallows(scene, campus.gallows, colliders);
   if (campus.crucifix) buildCrucifix(scene, campus.crucifix, colliders);
+  if (campus.smokeArea) buildSmokeArea(scene, campus.smokeArea, colliders, circles, seats);
 
   // --- Hasar və darvaza ---
   const fenceMat = lambert('#4a4f57');
@@ -874,6 +890,8 @@ export function buildWorld(scene, campus, quality = 'high') {
     edges.some((e) => segDist(x, z, e) < e.half + m) ||
     (campus.gallows && Math.abs(x - campus.gallows.x) < 6 + m && Math.abs(z - campus.gallows.z) < 6 + m) ||
     (campus.rooms || []).some((r) => Math.hypot(x - r.door.x, z - r.door.z) < 6 + m) ||
+    // Tüstüxananın ətrafı və girişi boş qalsın (kol/ağac girişin qabağını bağlamasın)
+    (!!campus.smokeArea?.hut && Math.abs(x - campus.smokeArea.hut.x) < campus.smokeArea.hut.w / 2 + 2 + m && Math.abs(z - campus.smokeArea.hut.z) < campus.smokeArea.hut.d / 2 + 2 + m) ||
     circles.some((c) => Math.hypot(x - c.x, z - c.z) < c.r + m);
   plantTrees(scene, campus, edges, blocked, circles, R);
 
@@ -1364,6 +1382,152 @@ function plantTrees(scene, campus, edges, blocked, circles, R) {
 /** Dar ağacı məhkumunun yeri (server də eyni hesablamanı edir) */
 export function gallowsSlot(g, i) {
   return { x: g.x + (i - (g.slots - 1) / 2) * g.slotGap, y: g.platformH, z: g.z };
+}
+
+// ---------- Prefabrik 1-in qarşısı: Tüstüxana, pavilyonlar, köşklər ----------
+/** Dördbucaq piramida dam (en w, dərinlik d, hündürlük h), y — damın altı */
+function pyramidRoof(grp, w, d, h, y, m) {
+  const g = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1);
+  g.rotateY(Math.PI / 4);
+  const roof = new THREE.Mesh(g, m);
+  roof.scale.set(w, h, d);
+  roof.position.y = y + h / 2;
+  roof.castShadow = roof.receiveShadow = true;
+  grp.add(roof);
+  return roof;
+}
+/** Skamya + dəqiq toqquşma qutusu (makeBench-in 1.1 m dairəsi kiçik pavilyonun içini bağlayardı) */
+function benchAt(scene, x, z, ry, colliders, seats) {
+  seats.push(makeBench(scene, x, z, ry, []));
+  const along = Math.abs(Math.sin(ry)) > 0.5; // skamya z oxu boyunca uzanır
+  colliders.push({ minX: x - (along ? 0.32 : 1.12), maxX: x + (along ? 0.32 : 1.12), minZ: z - (along ? 1.12 : 0.32), maxZ: z + (along ? 1.12 : 0.32), h: 0.6 });
+}
+/** Zibil qabı (yaşıl, qapaqlı) və ya külqabı (metal, üstü qum, içində kötüklər) */
+function binAt(scene, x, z, circles, ashtray = false) {
+  const grp = new THREE.Group();
+  grp.position.set(x, 0, z);
+  if (ashtray) {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.85, 12), lambert('#8d949c'));
+    body.position.y = 0.425;
+    const sand = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.02, 12), lambert('#d8c9a0'));
+    sand.position.y = 0.86;
+    grp.add(body, sand);
+    for (let i = 0; i < 5; i++) {
+      const butt = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.05, 5), lambert(i % 2 ? '#e9e4d8' : '#d49a55'));
+      butt.position.set(Math.cos(i * 1.3) * 0.08, 0.875, Math.sin(i * 1.3) * 0.08);
+      butt.rotation.z = Math.PI / 2; butt.rotation.y = i;
+      grp.add(butt);
+    }
+  } else {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.22, 0.8, 12), lambert('#3f6b45'));
+    body.position.y = 0.4;
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 12), lambert('#2e5235'));
+    lid.position.y = 0.83;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.02, 4, 10), lambert('#2e5235'));
+    ring.position.y = 0.87; ring.rotation.x = Math.PI / 2;
+    grp.add(body, lid, ring);
+  }
+  grp.traverse((o) => { o.castShadow = true; });
+  scene.add(grp);
+  circles.push({ x, z, r: ashtray ? 0.25 : 0.32 });
+}
+function buildSmokeArea(scene, cfg, colliders, circles, seats) {
+  const roofGreen = lambert('#86b394'), roofWhite = lambert('#ecebe6');
+  const post = lambert('#e9e4d8'), wall = lambert('#efe9dc'), base = lambert('#b9b0a2');
+  // --- Tüstüxana: alçaq divarlı açıq daxma, yaşıl piramida dam; girişi yola baxır (h.face = -1) ---
+  const h = cfg.hut;
+  if (h) {
+    const grp = new THREE.Group();
+    grp.position.set(h.x, 0, h.z);
+    scene.add(grp);
+    const box = (w, hh, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), m); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; grp.add(b); return b; };
+    const hw = h.w / 2, hd = h.d / 2;
+    box(h.w, 0.12, h.d, base, 0, 0.06, 0); // beton döşəmə
+    // alçaq divarlar: arxa (yol tərəfi) və yanlar; ön tərəfdə giriş
+    box(h.w, 1.0, 0.16, wall, 0, 0.5, -hd + 0.08);
+    box(0.16, 1.0, h.d, wall, -hw + 0.08, 0.5, 0);
+    box(0.16, 1.0, h.d, wall, hw - 0.08, 0.5, 0);
+    box(1.3, 1.0, 0.16, wall, -hw + 0.65, 0.5, hd - 0.08);
+    box(1.3, 1.0, 0.16, wall, hw - 0.65, 0.5, hd - 0.08);
+    for (const [px, pz] of [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]]) box(0.16, 2.45, 0.16, post, px - Math.sign(px) * 0.08, 1.22, pz - Math.sign(pz) * 0.08);
+    box(h.w + 0.1, 0.14, h.d + 0.1, post, 0, 2.48, 0); // dam altı çərçivə
+    pyramidRoof(grp, h.w + 0.9, h.d + 0.9, 1.15, 2.55, roofGreen);
+    // yazı lövhəsi girişin üstündə
+    const signTex = canvasTex(256, 52, (g, w, hh) => {
+      g.fillStyle = '#2f5d3d'; g.fillRect(0, 0, w, hh);
+      g.fillStyle = '#fff'; g.font = 'bold 28px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText((cfg.name || 'Tüstüxana').toUpperCase(), w / 2, hh / 2 + 2);
+    });
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.38), new THREE.MeshLambertMaterial({ map: signTex }));
+    sign.position.set(0, 2.25, hd + 0.02);
+    grp.add(sign);
+    // h.face: girişin baxdığı tərəf (+1 → +z, -1 → -z, yola). Daxma yerli koordinatlarda qurulub, lazım olsa 180° fırladılır
+    const f = h.face === -1 ? -1 : 1;
+    grp.rotation.y = f < 0 ? Math.PI : 0;
+    const X = h.x, Z = h.z;
+    const at = (lx, lz) => [X + f * lx, Z + f * lz];
+    const wallBox = (lx1, lx2, lz1, lz2) => {
+      const [ax, az] = at(lx1, lz1), [bx, bz] = at(lx2, lz2);
+      colliders.push({ minX: Math.min(ax, bx), maxX: Math.max(ax, bx), minZ: Math.min(az, bz), maxZ: Math.max(az, bz), h: 1 });
+    };
+    // divarlar toqquşur (giriş açıq qalır)
+    wallBox(-hw, hw, -hd, -hd + 0.16);
+    wallBox(-hw, -hw + 0.16, -hd, hd);
+    wallBox(hw - 0.16, hw, -hd, hd);
+    wallBox(-hw, -hw + 1.3, hd - 0.16, hd);
+    wallBox(hw - 1.3, hw, hd - 0.16, hd);
+    // içəridə: arxa divar boyu və sol divar boyu skamyalar (üzü girişə), küncdə zibil qabı və külqabı
+    const turn = f < 0 ? Math.PI : 0;
+    benchAt(scene, ...at(-0.4, -hd + 0.55), turn, colliders, seats);
+    benchAt(scene, ...at(-hw + 0.55, 0.55), Math.PI / 2 + turn, colliders, seats);
+    binAt(scene, ...at(hw - 0.45, -hd + 0.45), circles);
+    binAt(scene, ...at(hw - 0.5, 0.6), circles, true);
+  }
+  // çöldə də çəkirlər: skamya, külqabı və zibil qabı
+  const o = cfg.outside || {};
+  if (o.bench) benchAt(scene, o.bench[0], o.bench[1], o.bench[2] || 0, colliders, seats);
+  (o.bins || []).forEach(([x, z], i) => binAt(scene, x, z, circles, i === 0));
+  // --- Yaşıl damlı açıq pavilyonlar: 4 dirək, iki skamya üz-üzə, ortada stol ---
+  for (const g of cfg.gazebos || []) {
+    const grp = new THREE.Group();
+    grp.position.set(g.x, 0, g.z);
+    scene.add(grp);
+    const s = g.size || 4.4, hs = s / 2;
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(s, 0.1, s), base);
+    floor.position.y = 0.05; floor.receiveShadow = true; grp.add(floor);
+    for (const [px, pz] of [[-hs, -hs], [hs, -hs], [-hs, hs], [hs, hs]]) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.4, 0.14), post);
+      p.position.set(px * 0.94, 1.2, pz * 0.94); p.castShadow = true; grp.add(p);
+      circles.push({ x: g.x + px * 0.94, z: g.z + pz * 0.94, r: 0.14 });
+    }
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(s, 0.14, s), post);
+    frame.position.y = 2.42; grp.add(frame);
+    pyramidRoof(grp, s + 0.8, s + 0.8, 1.1, 2.48, roofGreen);
+    const table = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 1.7), lambert('#8b5a2b'));
+    table.position.y = 0.74; table.castShadow = true; grp.add(table);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.72, 0.12), lambert('#2d3238'));
+    leg.position.y = 0.36; grp.add(leg);
+    colliders.push({ minX: g.x - 0.4, maxX: g.x + 0.4, minZ: g.z - 0.85, maxZ: g.z + 0.85, h: 0.8 });
+    benchAt(scene, g.x - 1.25, g.z, Math.PI / 2, colliders, seats);
+    benchAt(scene, g.x + 1.25, g.z, -Math.PI / 2, colliders, seats);
+  }
+  // --- Ağ damlı kiçik köşklər (qapalı, qəhvəyi divar, damın təpəsində havalandırma) ---
+  for (const k of cfg.kiosks || []) {
+    const grp = new THREE.Group();
+    grp.position.set(k.x, 0, k.z);
+    scene.add(grp);
+    const s = k.size || 3.2, hs = s / 2;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(s, 2.5, s), lambert('#6e4b3b'));
+    body.position.y = 1.25; body.castShadow = body.receiveShadow = true; grp.add(body);
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.9), lambert('#3b2a22'));
+    door.position.set(0, 0.95, hs + 0.01); grp.add(door);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.6), new THREE.MeshLambertMaterial({ color: '#8fb3c9', emissive: '#22323d' }));
+    win.position.set(hs + 0.01, 1.6, 0); win.rotation.y = Math.PI / 2; grp.add(win);
+    pyramidRoof(grp, s + 0.7, s + 0.7, 1.0, 2.5, roofWhite);
+    const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.3, 8), lambert('#55595f'));
+    vent.position.y = 3.55; grp.add(vent);
+    colliders.push({ minX: k.x - hs, maxX: k.x + hs, minZ: k.z - hs, maxZ: k.z + hs, h: 3.5 });
+  }
 }
 
 function buildGallows(scene, g, colliders) {

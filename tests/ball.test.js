@@ -86,11 +86,13 @@ const decor = CAMPUS.plazaDecor.hoops[0];
 ok('halqa və lövhə görünüşü fizika ilə eyni yerdədir', Math.abs(decor.z + decor.dir * decor.rim - H.z) < 1e-6 && Math.abs(decor.z + decor.dir * decor.board - H.board.z) < 1e-6);
 ok('halqanın arxa hissəsi görünməz divarla kəsilmir', H.z + H.r + BB.r < BB.bounds.maxZ && (H.board.z - H.z) * H.board.dir > H.r);
 const spots = [[69, -231.5], [72, -233], [66, -234], [69, -237], [75, -238], [63, -240], [80, -245], [69, -250]];
-const aim = (x, z, p, rnd) => basketAim({ px: x, py: BB.r, pz: z }, H, p, rnd);
-const exact = spots.filter(([x, z]) => shoot({ x, z }, aim(x, z, 0.5, () => 0.5)).made === 1).length;
+// server vurulan topu yerdən 5 sm qaldırır — atış həmin hündürlükdən başlayır
+const Y0 = BB.r + 0.05;
+const aim = (x, z, p, rnd) => basketAim({ px: x, py: Y0, pz: z }, H, p, rnd);
+const exact = spots.filter(([x, z]) => shoot({ x, z, y: Y0 }, aim(x, z, 0.5, () => 0.5)).made === 1).length;
 ok('dəqiq atış (güc zolağının ortası) müxtəlif yerlərdən səbətə düşür', exact === spots.length, `${exact}/${spots.length}`);
 let weak = 0;
-for (const [x, z] of spots) weak += shoot({ x, z }, aim(x, z, 0, () => 0.5)).made;
+for (const [x, z] of spots) weak += shoot({ x, z, y: Y0 }, aim(x, z, 0, () => 0.5)).made;
 ok('zəif atış (güc 0) səbətə düşmür', weak === 0, `${weak}`);
 const fastest = Math.max(...spots.map(([x, z]) => Math.hypot(...aim(x, z, 1, () => 1))));
 ok('ən uzaq/güclü atış serverin sürət limitinə (20) sığır', fastest < 20, fastest.toFixed(1));

@@ -91,6 +91,8 @@ for (const r of CAMPUS.rooms || []) {
     ROOMS.push({ ...r, inst: k, z, rect: { minX: r.x - r.w / 2, maxX: r.x + r.w / 2, minZ: z - r.d / 2, maxZ: z + r.d / 2 } });
   }
 }
+const SMOKE_ZONE = CAMPUS.smokeArea?.zone || null;
+const inSmokeZone = (x, z) => !!SMOKE_ZONE && Math.hypot(x - SMOKE_ZONE.x, z - SMOKE_ZONE.z) < SMOKE_ZONE.r + 1.5;
 const roomAt = (x, z, m = 1) => ROOMS.find((r) => x > r.rect.minX - m && x < r.rect.maxX + m && z > r.rect.minZ - m && z < r.rect.maxZ + m) || null;
 function clearLine(x1, z1, x2, z2) {
   return !CAMPUS.buildings.some((b) => segHitsBox(x1, z1, x2, z2, b));
@@ -1454,6 +1456,8 @@ wss.on('connection', (ws, req) => {
       e.moving = !!m.m;
       // 5 = oturub, 7–12 = yeni emosiyalar (4 və 6 yalnız dar ağacı/çarmıx məhkumları üçündür)
       e.emote = [0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13].includes(m.e) ? m.e : 0;
+      // 14/15 — siqaret (ayaq üstə / oturub): yalnız Tüstüxana zonasında (gecikmə üçün 1.5 m ehtiyat)
+      if ((m.e === 14 || m.e === 15) && inSmokeZone(e.x, e.z)) e.emote = m.e;
       e.w = m.w === 1 && !shield(e) ? 1 : 0; // qorunan oyunçunun əlində silah olmur
       // Gəzməyə görə XP
       const d = Math.min(3, Math.hypot(e.x - ws.lastPos.x, e.z - ws.lastPos.z));

@@ -63,6 +63,15 @@ for (const n of C.npcs || []) objects.push([`NPC ${n.name}`, n.x, n.z, 0.5]);
 if (C.gallows) objects.push(['dar ağacı', C.gallows.x, C.gallows.z, 4]);
 if (C.crucifix) objects.push(['çarmıx', C.crucifix.x, C.crucifix.z, (C.crucifix.slots * C.crucifix.slotGap + 2) / 2]);
 objects.push(['doğulma nöqtəsi', C.spawn.x, C.spawn.z, 0.5]);
+const SA = C.smokeArea;
+if (SA) {
+  if (SA.hut) objects.push(['Tüstüxana', SA.hut.x, SA.hut.z, Math.hypot(SA.hut.w, SA.hut.d) / 2]);
+  for (const g of SA.gazebos || []) objects.push(['pavilyon', g.x, g.z, 2.6]);
+  for (const k of SA.kiosks || []) objects.push(['köşk', k.x, k.z, 2]);
+  for (const [x, z] of SA.outside?.bins || []) objects.push(['zibil qabı', x, z, 0.3]);
+  if (SA.outside?.bench) objects.push(['skamya (Tüstüxana)', SA.outside.bench[0], SA.outside.bench[1], 1.1]);
+  if (SA.hut && SA.zone && Math.hypot(SA.hut.x - SA.zone.x, SA.hut.z - SA.zone.z) > SA.zone.r - 2) warn('siqaret zonası Tüstüxananı əhatə etmir');
+}
 for (const [name, x, z, r] of objects) {
   const e = onRoad(x, z, r);
   if (e && name !== 'doğulma nöqtəsi') warn(`${name} (${x}, ${z}) ${e.a}-${e.c} ${e.type === 'road' ? 'yolunun' : 'cığırının'} üstündədir`);

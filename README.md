@@ -131,6 +131,16 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   collect it (+5 XP); it reappears somewhere else after 45 seconds.
 - **Leaderboard:** hold **Tab** to see the top players (level, kills, deaths, stars, goals/baskets).
 
+### In front of Prefabrik 1: Tüstüxana
+- The dirt lot between Prefabrik 1, the road and the football pitch, rebuilt from satellite imagery: two open
+  green-roofed pavilions with benches and a table, and three small white-roofed kiosks along the road.
+- **Tüstüxana** (the students' smoking hut) at the road end of Prefabrik 1: low walls, a green pyramid roof,
+  benches inside, a bin and a sand ashtray, plus a bench, ashtray and bin outside.
+- Press **K** (or tap 🚬 on screen) inside or around Tüstüxana to light a cigarette: your character holds it,
+  takes a drag every few seconds and blows smoke; it also works sitting on a bench. Walking out of the area,
+  picking up the pistol or another emote puts it out. Smoking is only accepted by the server inside this area.
+- Fast travel (**T**) has a 🚬 Tüstüxana stop.
+
 ### Gallows
 - Walk up to the gallows and press **F** to open its panel.
 - Create a fictional "prisoner" NPC in the character creator and pick a name from the preset list
@@ -155,6 +165,7 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 | Mouse wheel | Zoom |
 | `G` | Switch between fists and pistol |
 | `B` | Safe mode on / off (no weapon, nobody can hit you) |
+| `K` | Light / put out a cigarette (only at Tüstüxana) |
 | `T` | Fast travel |
 | Left click | Punch / shoot |
 | `R` | Reload |
@@ -192,7 +203,7 @@ npm run test:map  # only the campus.json checks
 - `tests/ball.test.js` checks the shared ball physics (`public/js/ballphys.js`): goals, goal nets and posts,
   players' bodies, the basketball rim, backboard and shot accuracy, and ball-to-ball collisions.
 - `tests/protocol.test.js` starts its own server on port 3101 with a temporary data folder
-  (your `data/players.json` is never touched) and runs 97 multiplayer checks: login and
+  (your `data/players.json` is never touched) and runs 100 multiplayer checks: login and
   character validation, sync, chat, teleport guard, shooting, ammo, death and respawn,
   punching, the gallows, brute-force protection and session takeover.
 

@@ -562,6 +562,8 @@ function buildHair(head, style, m, o) {
 }
 
 // ---------------- Animasiya ----------------
+/** siqaret dövrü (san): əl ağıza qalxır (0.25–1.9), tüstü buraxılır (~2.1) */
+export const SMOKE_CYCLE = 6.5;
 // emote: 0 yoxdur, 1 əl yelləmək, 2 rəqs, 3 sevinc
 export function animateRig(r, dt, speed, opt = {}) {
   const air = !!opt.air, emote = opt.emote || 0;
@@ -602,6 +604,24 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.armLx = T.armRx = -0.55; T.armLz = 0.12; T.armRz = -0.12; T.elbowL = T.elbowR = -0.75;
     T.spineX = -0.06;
     T.headY = Math.sin(t * 0.35) * 0.35; T.headX = Math.sin(t * 0.23) * 0.08;
+  } else if (emote === 14 || emote === 15) {
+    // siqaret (14 — ayaq üstə, 15 — skamyada oturub): sağ əl vaxtaşırı ağıza qalxır, sonra tüstü buraxır
+    const u = t % SMOKE_CYCLE;
+    r.smokeU = u;
+    const atMouth = u > 0.25 && u < 1.9;
+    if (atMouth) { T.armRx = -1.3; T.armRz = 0.55; T.elbowR = -2.5; T.headX = 0.04; }
+    else { T.armRx = -0.3; T.armRz = 0.06; T.elbowR = -1.5; T.elbowRz = -0.25; }
+    if (u > 2.1 && u < 3.4) T.headX = -0.16; // tüstünü yuxarı buraxır
+    T.headY = atMouth ? 0 : Math.sin(t * 0.4) * 0.25;
+    if (emote === 15) {
+      T.bodyY = 0.52 - (r.hipH || 0.92);
+      T.legL = T.legR = -1.5; T.kneeL = T.kneeR = 1.45;
+      T.armLx = -0.55; T.armLz = 0.12; T.elbowL = -0.75;
+      T.spineX = 0.04;
+    } else {
+      T.armLx = 0.08; T.armLz = 0.14; T.elbowL = -0.35; // sol əl boş, rahat
+      T.legL = 0.04; T.legR = -0.06;
+    }
   } else if (emote === 7) {
     // əl çalmaq
     const c = Math.sin(t * 16);
@@ -740,6 +760,27 @@ export function makePistol() {
   muzzle.position.set(0, -0.21, 0);
   g.add(muzzle);
   g.userData.muzzle = muzzle;
+  return g;
+}
+
+// ---------------- Siqaret (əldə; ucu közərir) ----------------
+export function makeCigarette() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, 0.07, 6), mat('#f4f1ea'));
+  body.rotation.x = Math.PI / 2;
+  body.position.z = 0.035;
+  const filter = new THREE.Mesh(new THREE.CylinderGeometry(0.0068, 0.0068, 0.022, 6), mat('#d39a52'));
+  filter.rotation.x = Math.PI / 2;
+  filter.position.z = -0.008;
+  const ember = new THREE.Mesh(new THREE.CylinderGeometry(0.0066, 0.0066, 0.008, 6),
+    new THREE.MeshBasicMaterial({ color: '#ff6a1a' }));
+  ember.rotation.x = Math.PI / 2;
+  ember.position.z = 0.073;
+  const tip = new THREE.Object3D();
+  tip.position.z = 0.078;
+  g.add(body, filter, ember, tip);
+  g.position.set(0.01, -0.085, 0.02); // barmaqların arasında, irəli baxır
+  g.userData.tip = tip;
   return g;
 }
 
