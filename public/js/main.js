@@ -158,7 +158,7 @@ function send(m) { if (ws?.readyState === 1) ws.send(JSON.stringify(m)); }
 function handle(m) {
   switch (m.t) {
     case 'loginErr':
-      $('login-err').textContent = m.msg;
+      showAuthError(m.msg, m.code);
       $('login-btn').disabled = false;
       break;
     case 'loginOk':
@@ -715,13 +715,53 @@ function updateGallowsUi() {
   }
 }
 
-// ---------- Giriş ----------
+// ---------- Giriş və qeydiyyat (iki ayrı ekran, eyni kartda) ----------
+let authMode = 'login';
+function setAuthMode(mode) {
+  authMode = mode;
+  const reg = mode === 'register';
+  $('login-form').dataset.mode = mode;
+  $('tab-login').classList.toggle('on', !reg);
+  $('tab-register').classList.toggle('on', reg);
+  $('tab-login').setAttribute('aria-selected', String(!reg));
+  $('tab-register').setAttribute('aria-selected', String(reg));
+  $('pin2-row').hidden = !reg;
+  $('login-pin2').required = reg;
+  $('login-pin').autocomplete = reg ? 'new-password' : 'current-password';
+  $('login-sub').textContent = reg ? 'Yeni hesab: ad seç və PIN-i iki dəfə yaz.' : 'Kampusa xoş gəldin! Adını və PIN-ini yaz.';
+  $('login-btn').textContent = reg ? 'Qeydiyyatdan keç' : 'Daxil ol';
+  $('switch-text').textContent = reg ? 'Hesabın var?' : 'Hesabın yoxdur?';
+  $('switch-btn').textContent = reg ? 'Daxil ol' : 'Qeydiyyatdan keç';
+  $('login-hint').textContent = reg ? 'PIN 4-8 rəqəmdir. Onu unutma — bərpa etmək olmur.' : 'PIN-i unutma — onu bərpa etmək olmur.';
+  $('login-err').replaceChildren();
+}
+/** Xəta + lazım olsa digər ekrana keçid düyməsi (məs. "Belə hesab yoxdur" → Qeydiyyat) */
+function showAuthError(msg, code) {
+  const box = $('login-err');
+  box.replaceChildren(document.createTextNode(msg));
+  const go = code === 'noAcc' ? 'register' : code === 'taken' ? 'login' : null;
+  if (go) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'linkbtn';
+    b.textContent = go === 'register' ? 'Qeydiyyata keç →' : 'Daxil ol →';
+    b.onclick = () => { setAuthMode(go); $('login-pin').focus(); };
+    box.append(' ', b);
+  }
+}
+$('tab-login').onclick = () => setAuthMode('login');
+$('tab-register').onclick = () => setAuthMode('register');
+$('switch-btn').onclick = () => setAuthMode(authMode === 'login' ? 'register' : 'login');
 $('login-name').value = localStorage.getItem('bmu-name') || '';
+// əvvəllər girməyibsə — qeydiyyat ekranı ilə başla
+setAuthMode(localStorage.getItem('bmu-name') ? 'login' : 'register');
 $('login-form').onsubmit = (e) => {
   e.preventDefault();
-  $('login-err').textContent = '';
+  $('login-err').replaceChildren();
+  const name = $('login-name').value, pin = $('login-pin').value;
+  if (authMode === 'register' && pin !== $('login-pin2').value) return showAuthError('PIN-lər eyni deyil.');
   $('login-btn').disabled = true;
-  send({ t: 'login', name: $('login-name').value, pin: $('login-pin').value });
+  send(authMode === 'register' ? { t: 'register', name, pin, pin2: $('login-pin2').value } : { t: 'login', name, pin });
 };
 
 // ---------- Xarakter redaktoru ----------

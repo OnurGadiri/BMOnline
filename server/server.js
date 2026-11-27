@@ -1109,7 +1109,9 @@ wss.on('connection', (ws, req) => {
     try { m = JSON.parse(raw); } catch { return; }
     if (!m || typeof m.t !== 'string') return;
 
-    if (m.t === 'login') {
+    // Giriş (login) və qeydiyyat (register) ayrıdır: login hesab yaratmır, register mövcud adı götürmür.
+    // Qorumalar ikisində də: 800 ms sürət həddi, ad/PIN yoxlaması, səhv cəhd blokları, IP-dən saatda 5 yeni hesab.
+    if (m.t === 'login' || m.t === 'register') {
       if (Date.now() - (ws.lastLogin || 0) < 800) return send(ws, { t: 'loginErr', msg: 'Bir az yavaş 🙂' });
       ws.lastLogin = Date.now();
       const name = String(m.name || '').trim();
@@ -1121,13 +1123,18 @@ wss.on('connection', (ws, req) => {
       if (wait) return send(ws, { t: 'loginErr', msg: `Çox səhv cəhd. ${wait} dəqiqə sonra yenidən yoxla.` });
       let acc = db.accounts[key];
       let isNew = false;
-      if (!acc) {
+      if (m.t === 'register') {
+        if (m.pin2 !== undefined && String(m.pin2) !== pin) return send(ws, { t: 'loginErr', code: 'pin2', msg: 'PIN-lər eyni deyil.' });
+        if (acc) return send(ws, { t: 'loginErr', code: 'taken', msg: 'Bu ad artıq var — başqa ad seç və ya daxil ol.' });
         if (lockedFor(newAccByIp, ws.ip)) return send(ws, { t: 'loginErr', msg: 'Bu şəbəkədən çox hesab yaradılıb. Bir az sonra yoxla.' });
         countHit(newAccByIp, ws.ip, 5, 3600_000, 3600_000);
         const salt = crypto.randomBytes(16).toString('hex');
         acc = db.accounts[key] = { name, salt, hash: hashPin(pin, salt), appearance: null, level: 1, xp: 0, pos: null, createdAt: Date.now() };
         isNew = true;
         scheduleSave();
+      } else if (!acc) {
+        countHit(failByIp, ws.ip, 25, 600_000, 600_000); // ad axtarışı ilə hesab tapmağı yavaşlat
+        return send(ws, { t: 'loginErr', code: 'noAcc', msg: 'Belə hesab yoxdur — qeydiyyatdan keç.' });
       } else if (!crypto.timingSafeEqual(Buffer.from(hashPin(pin, acc.salt), 'hex'), Buffer.from(acc.hash, 'hex'))) {
         countHit(failByIpAcc, `${ws.ip}|${key}`, 5, 600_000, 600_000);
         countHit(failByIp, ws.ip, 25, 600_000, 600_000);

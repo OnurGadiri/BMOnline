@@ -17,14 +17,20 @@
 
   <!-- Giriş -->
   <div id="login" class="screen">
-    <form id="login-form" class="card">
+    <form id="login-form" class="card" data-mode="login">
       <h1>BMU <span>Online</span></h1>
-      <p class="sub">Kampusa xoş gəldin! Adını və PIN-ini yaz.</p>
+      <div class="auth-tabs" role="tablist">
+        <button type="button" id="tab-login" class="auth-tab on" role="tab" aria-selected="true">Daxil ol</button>
+        <button type="button" id="tab-register" class="auth-tab" role="tab" aria-selected="false">Qeydiyyat</button>
+      </div>
+      <p class="sub" id="login-sub">Kampusa xoş gəldin! Adını və PIN-ini yaz.</p>
       <label>Oyunçu adı<input id="login-name" maxlength="16" autocomplete="username" required /></label>
       <label>PIN (4-8 rəqəm)<input id="login-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" required /></label>
+      <label id="pin2-row" hidden>PIN təkrarı<input id="login-pin2" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" /></label>
       <button id="login-btn" type="submit" disabled>Daxil ol</button>
       <div id="login-err" class="err"></div>
-      <p class="hint">Bu ad ilə ilk dəfə girirsənsə, hesab avtomatik yaradılır. PIN-i unutma!</p>
+      <p class="hint auth-switch"><span id="switch-text">Hesabın yoxdur?</span> <button type="button" id="switch-btn" class="linkbtn">Qeydiyyatdan keç</button></p>
+      <p class="hint" id="login-hint">PIN-i unutma — onu bərpa etmək olmur.</p>
     </form>
   </div>
 

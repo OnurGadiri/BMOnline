@@ -37,7 +37,9 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 ## Features
 
 ### Accounts & persistence
-- Sign in with a name and a 4–8 digit PIN; new accounts are created automatically.
+- Two screens on one card: **Daxil ol** (sign in: name + PIN) and **Qeydiyyat** (register: name + PIN + PIN again),
+  with a switch between them. Signing in no longer creates accounts ("Belə hesab yoxdur — qeydiyyatdan keç"),
+  and registering refuses a name that is already taken (case-insensitive). The first visit opens the register screen.
 - PINs are stored as salted `scrypt` hashes in `data/players.json` (excluded from git).
 - Your position, level, XP and character are saved between sessions.
 
@@ -203,7 +205,7 @@ npm run test:map  # only the campus.json checks
 - `tests/ball.test.js` checks the shared ball physics (`public/js/ballphys.js`): goals, goal nets and posts,
   players' bodies, the basketball rim, backboard and shot accuracy, and ball-to-ball collisions.
 - `tests/protocol.test.js` starts its own server on port 3101 with a temporary data folder
-  (your `data/players.json` is never touched) and runs 100 multiplayer checks: login and
+  (your `data/players.json` is never touched) and runs 104 multiplayer checks: login, register and
   character validation, sync, chat, teleport guard, shooting, ammo, death and respawn,
   punching, the gallows, brute-force protection and session takeover.
 

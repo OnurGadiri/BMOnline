@@ -59,10 +59,11 @@ class Client {
   }
 }
 
-async function enter(name, pin = '1234') {
+/** Yeni hesab — qeydiyyat (register); mövcud hesab (existing=true) — giriş (login) */
+async function enter(name, pin = '1234', existing = false) {
   const c = new Client(name);
   await c.open();
-  c.send({ t: 'login', name, pin });
+  c.send(existing ? { t: 'login', name, pin } : { t: 'register', name, pin, pin2: pin });
   const lo = await c.waitT('loginOk');
   c.send({ t: 'saveChar', appearance: { body: 'm', hair: 'NOT_A_HAIR', skin: 'red', height: 99 } });
   const cs = await c.waitT('charSaved');
@@ -85,11 +86,30 @@ async function enter(name, pin = '1234') {
   bad.send({ t: 'login', name: 'Valid Name', pin: '1234' });
   const slow = await bad.waitT('loginErr', 500);
   ok('tez-tez giriş cəhdi yavaşladılır', !!slow && /yavaş/.test(slow.msg), slow?.msg);
+  await sleep(850);
+  bad.send({ t: 'login', name: 'Hesabsiz', pin: '1234' });
+  const noAcc = await bad.waitT('loginErr', 1500);
+  ok('giriş (login) hesab yaratmır — "belə hesab yoxdur"', !!noAcc && noAcc.code === 'noAcc' && /qeydiyyat/.test(noAcc.msg), noAcc?.msg);
+  await sleep(850);
+  bad.send({ t: 'register', name: 'Hesabsiz', pin: '1234', pin2: '4321' });
+  const pinMis = await bad.waitT('loginErr', 1500);
+  ok('qeydiyyatda PIN təkrarı eyni olmalıdır', !!pinMis && pinMis.code === 'pin2', pinMis?.msg);
+  await sleep(850);
+  bad.send({ t: 'register', name: 'Valid Name', pin: '12', pin2: '12' });
+  ok('qeydiyyatda da qısa PIN rədd edilir', /PIN 4-8/.test((await bad.waitT('loginErr', 1500))?.msg || ''));
   bad.close();
 
   // --- 2. Hesab yaratma, xarakter, oyuna giriş ---
   const A = await enter('Alfa');
-  ok('yeni hesab yaradılır', A.lo?.isNew === true);
+  ok('qeydiyyat (register) yeni hesab yaradır', A.lo?.isNew === true);
+  {
+    const dup = new Client('dup');
+    await dup.open();
+    dup.send({ t: 'register', name: 'ALFA', pin: '9999', pin2: '9999' });
+    const taken = await dup.waitT('loginErr', 1500);
+    ok('qeydiyyatda tutulmuş ad (böyük/kiçik hərf fərqi olmadan) rədd edilir', !!taken && taken.code === 'taken' && /artıq var/.test(taken.msg), taken?.msg);
+    dup.close();
+  }
   ok('yanlış görünüş standart dəyərlərlə düzəldilir', A.cs && A.cs.appearance.hair !== 'NOT_A_HAIR' && /^#[0-9a-f]{6}$/.test(A.cs.appearance.skin) && A.cs.appearance.height <= 1.12, JSON.stringify(A.cs?.appearance).slice(0, 80));
   ok('oyuna giriş (welcome)', !!A.wel && A.wel.you.hp === 100);
   await sleep(200);
@@ -185,6 +205,12 @@ async function enter(name, pin = '1234') {
   ok('arxadakı hədəfə yumruq dəymir', !(await ph2));
 
   // --- 8. Dar ağacı ---
+  // B təsadüfi yerdə doğulur və A yumruq üçün onun yanına gedir — dar ağacının yanına düşə bilər.
+  // "Uzaqda göndərmək olmur" yoxlaması həqiqətən uzaqdan olsun (yoxsa məhkum yerləşir və sonrakı testlər zəncirvari düşür)
+  if (Math.hypot(A.c.pos.x + 92, A.c.pos.z + 140) < 30 || Math.hypot(A.c.pos.x + 105, A.c.pos.z + 135) < 30) {
+    A.c.pos = await A.c.walkTo(A.c.pos, { x: -55, z: -140 }, 8.5);
+    await sleep(150);
+  }
   A.c.send({ t: 'gallowsDummy', name: 'Qara Quldur', appearance: {} });
   const far = await A.c.waitT('error', 1500);
   ok('dar ağacından uzaqda məhkum göndərmək olmur', !!far && /yaxınlaş/.test(far.msg));
@@ -419,9 +445,9 @@ async function enter(name, pin = '1234') {
   // --- 8e. 🛡 Təhlükəsiz rejim və oyun zamanı qoruma ---
   {
     // bir IP-dən saatda 5 hesab yaradılır — əvvəlki bölmələrin hesablarından istifadə edirik (oflayn NPC-lər idi)
-    let S = await enter('Gamma');
-    const T = await enter('Epsilon');
-    const Y = await enter('Delta');
+    let S = await enter('Gamma', '1234', true);
+    const T = await enter('Epsilon', '1234', true);
+    const Y = await enter('Delta', '1234', true);
     // hamını meydana gətir (teleport gözləməsi varsa, gözlə)
     const toPlaza = async (P) => {
       for (let i = 0; i < 3; i++) {
@@ -490,7 +516,7 @@ async function enter(name, pin = '1234') {
     const offNpc = T.c.waitT('entity', 3000, (m) => m.e.id === 'gamma' && m.e.online === false);
     S.c.close();
     ok('çıxan oyunçunun NPC-si də qorunur', (await offNpc)?.e.safe === true);
-    S = await enter('Gamma');
+    S = await enter('Gamma', '1234', true);
     ok('təhlükəsiz rejim yenidən girəndə də açıq qalır', S.wel.you.safe === true);
     // döyüşdə (zərər aldıqdan dərhal sonra) matça qoşulub qorunmağa qaçmaq olmur — Y indicə vuruldu
     const noJoin = Y.c.waitT('sys', 1500, (m) => /Döyüşdəsən/.test(m.msg));
@@ -525,7 +551,7 @@ async function enter(name, pin = '1234') {
 
   // --- 8f. 🚬 Tüstüxana: siqaret yalnız Prefabrik 1-in yanındakı zonada ---
   {
-    const D = await enter('Delta');
+    const D = await enter('Delta', '1234', true);
     const zone = require(path.join(__dirname, '..', 'public', 'data', 'campus.json')).smokeArea.zone;
     const emoteOf = async () => {
       const sn = await A.c.waitT('snap', 1500, (m) => m.e.some((r) => r[0] === 'delta'));
