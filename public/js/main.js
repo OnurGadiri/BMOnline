@@ -9,6 +9,7 @@ import { Fx, sfx, makeHpBar, aimPoint } from './combat.js';
 import { Minimap } from './minimap.js';
 import { Play, BALL_G } from './play.js';
 import { initTouch, touchInput, isTouchDevice } from './touch.js';
+import { buildBirds } from './birds.js';
 
 const TOUCH = isTouchDevice();
 
@@ -22,10 +23,17 @@ const minimap = new Minimap(CAMPUS, document.getElementById('minimap'));
 
 // ---------- Renderer ----------
 const canvas = $('view');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+// Keyfiyyət əvvəlcədən oxunur (renderer yaradılarkən antialias lazımdır)
+const LOW = (JSON.parse(localStorage.getItem('bmu-settings') || '{}').quality || (TOUCH ? 'low' : 'high')) === 'low';
+// telefonda MSAA çox bahalıdır — onun yerinə piksel sıxlığı adaptiv idarə olunur
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !LOW && !TOUCH, powerPreference: 'high-performance' });
+const DPR_MAX = LOW ? (TOUCH ? Math.min(1.25, window.devicePixelRatio) : 1) : Math.min(2, window.devicePixelRatio);
+let dpr = DPR_MAX;
+renderer.setPixelRatio(dpr);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = LOW ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+// uzaqdakı personajlar: gizlət / seyrək animasiya (metr)
+const LOD = LOW ? { hide: 90, slow: 45 } : { hide: 160, slow: 70 };
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 function resize() { renderer.setSize(window.innerWidth, window.innerHeight, false); }
@@ -47,6 +55,7 @@ const SHADOW = { high: [4096, 60], low: [1024, 40] };
 scene.add(sun, sun.target);
 let world = null;
 let play = null; // toplar, ulduzlar
+let updateBirds = null;
 const fx = new Fx(scene);
 
 // ---------- Vəziyyət ----------
@@ -77,7 +86,26 @@ if (TOUCH) settings.lock = false;
   Object.assign(sun.shadow.camera, { left: -area, right: area, top: area, bottom: -area, near: 1, far: 260 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
-  if (settings.quality === 'low') renderer.setPixelRatio(TOUCH ? Math.min(1.5, window.devicePixelRatio) : 1);
+  if (LOW) {
+    // aşağı keyfiyyət: kölgə hər kadr yox, iki kadrdan bir yenilənir; görmə məsafəsi qısalır
+    sun.shadow.autoUpdate = false;
+    camera.far = 650; scene.fog.near = 140; scene.fog.far = 520;
+  }
+}
+// Adaptiv çözünürlük: FPS düşəndə piksel sıxlığı azalır, düzələndə geri qalxır
+const perf = { acc: 0, n: 0, frame: 0, slowFor: 0, fastFor: 0 };
+function adaptResolution(rawDt) {
+  perf.acc += rawDt; perf.n++;
+  if (perf.acc < 1) return;
+  const fps = perf.n / perf.acc; perf.acc = 0; perf.n = 0;
+  if (document.hidden) return;
+  if (fps < 40) { perf.slowFor++; perf.fastFor = 0; } else if (fps > 56) { perf.fastFor++; perf.slowFor = 0; } else { perf.slowFor = perf.fastFor = 0; }
+  let next = dpr;
+  if (perf.slowFor >= 2) { next = Math.max(0.6, dpr - 0.15); perf.slowFor = 0; }
+  else if (perf.fastFor >= 4) { next = Math.min(DPR_MAX, dpr + 0.1); perf.fastFor = 0; }
+  if (Math.abs(next - dpr) > 0.01) { dpr = next; renderer.setPixelRatio(dpr); resize(); }
+  window.__bmu.fps = Math.round(fps); window.__bmu.dpr = dpr;
+  if (settings.fps) $('fps').textContent = `${Math.round(fps)} FPS · ${dpr.toFixed(2)}x`;
 }
 function saveSettings() { localStorage.setItem('bmu-settings', JSON.stringify(settings)); }
 $('set-sens').value = settings.sens;
@@ -244,6 +272,7 @@ function handle(m) {
       if (m.kill) toast(`💀 ${others.get(m.id)?.name || ''} məğlub oldu! +XP`);
       break;
     case 'dead':
+      if (m.by) killFeed(m.by, m.id === state.myId ? state.name : others.get(m.id)?.name, m.weapon);
       if (m.id === state.myId) {
         player.dead = true;
         player.hp = 0;
@@ -509,6 +538,7 @@ function enterGame(m) {
     play = new Play(scene, CAMPUS, sfx);
     window.__bmu.play = play;
     buildStaticNpcs();
+    updateBirds = buildBirds(scene, CAMPUS.spawn, LOW ? 9 : 18);
   }
   state.myId = m.you.id;
   state.inGame = true;
@@ -709,6 +739,25 @@ $('set-help').onchange = (e) => setHelpHidden(!e.target.checked);
 $('set-minimal').onchange = (e) => setMinimal(e.target.checked);
 setHelpHidden(!!settings.hideHelp);
 setMinimal(!!settings.minimal);
+$('set-fps').checked = !!settings.fps;
+$('fps').hidden = !settings.fps;
+$('set-fps').onchange = (e) => { settings.fps = e.target.checked; saveSettings(); $('fps').hidden = !settings.fps; };
+
+// Öldürmə lenti (sağ yuxarı): "A 🔫 B"
+setTimeout(() => { window.__bmu.killFeed = killFeed; });
+function killFeed(by, victim, weapon) {
+  const row = document.createElement('div');
+  const mine = by === state.name || victim === state.name;
+  row.className = 'kf' + (mine ? ' mine' : '');
+  const b = document.createElement('b'); b.textContent = by || '?';
+  const v = document.createElement('b'); v.textContent = victim || '?';
+  row.append(b, ` ${weapon === 'pistol' ? '🔫' : '👊'} `, v);
+  const box = $('killfeed');
+  box.prepend(row);
+  while (box.children.length > 4) box.lastChild.remove();
+  setTimeout(() => row.classList.add('out'), 5000);
+  setTimeout(() => row.remove(), 5600);
+}
 
 // Birinci şəxs görünüşü
 function toggleFirstPerson(on = !cam.fp) {
@@ -1107,7 +1156,17 @@ function updateOthers(dt) {
     if (wantGun !== !!o.gunMesh) attachGun(o, wantGun);
     if (o.punchT > 0) { o.punchT += dt / 0.32; if (o.punchT >= 1) o.punchT = 0; }
     const v = Math.hypot(r.position.x - bx, r.position.z - bz) / Math.max(dt, 1e-3);
-    animateRig(o.char.rig, dt, o.dead ? 0 : o.moving ? Math.max(0.35, v / 4) : 0, {
+    // LOD: uzaqdakı personajlar gizlənir, orta məsafədəkilər daha seyrək animasiya olunur
+    const d2 = r.position.distanceToSquared(camera.position);
+    const far = LOD.hide * LOD.hide;
+    r.visible = d2 < far;
+    if (!r.visible) continue;
+    o.animAcc = (o.animAcc || 0) + dt;
+    const every = d2 > LOD.slow * LOD.slow ? 3 : d2 > (LOD.slow * 0.5) ** 2 ? 2 : 1;
+    o.animN = ((o.animN || 0) + 1) % every;
+    if (o.animN !== 0) continue;
+    const adt = Math.min(0.15, o.animAcc); o.animAcc = 0;
+    animateRig(o.char.rig, adt, o.dead ? 0 : o.moving ? Math.max(0.35, v / 4) : 0, {
       air: !o.dead && r.position.y > 0.05, emote: o.emote, weapon: o.w, punch: o.punchT || 0, dead: o.dead,
     });
   }
@@ -1115,11 +1174,19 @@ function updateOthers(dt) {
 
 function loop() {
   requestAnimationFrame(loop);
-  frame(Math.min(0.05, clock.getDelta()));
+  const raw = clock.getDelta();
+  if (state.inGame) adaptResolution(raw);
+  frame(Math.min(0.05, raw));
 }
 // Sazlama/test üçün: oyun dövrünü əl ilə irəli aparmaq (məs. __bmu.step(1/60, 120))
 window.__bmu.step = (dt = 1 / 60, n = 1) => { for (let i = 0; i < n; i++) { clock.elapsedTime += dt; frame(dt); } };
 
+const opCache = {};
+function setOpacity(id, v) {
+  v = Math.round(v * 50) / 50;
+  if (opCache[id] === v) return;
+  opCache[id] = v; $(id).style.opacity = v;
+}
 function frame(dt) {
   document.body.classList.toggle('in-creator', state.mode === 'creator');
   if (player.emote !== frame.lastEmote) { frame.lastEmote = player.emote; updateEmoteBar(); }
@@ -1140,13 +1207,18 @@ function frame(dt) {
   updateInteractions(dt);
   updateCamera(dt);
   world.update(clock.elapsedTime, dt, camera);
+  updateBirds?.(clock.elapsedTime, dt);
   fx.update(dt);
-  if (!document.body.classList.contains('photo')) minimap.draw(player.pos, player.ry, cam.yaw, others, play?.stars);
-  // zərər effekti və isabət işarəsi
+  perf.frame++;
+  // mini-xəritə (2D canvas) hər kadr çəkilmir: aşağı keyfiyyətdə saniyədə ~15 dəfə
+  const mapBig = minimap.canvas?.classList?.contains('big');
+  if (!document.body.classList.contains('photo') && (!LOW || mapBig || perf.frame % 4 === 0)) minimap.draw(player.pos, player.ry, cam.yaw, others, play?.stars);
+  // zərər effekti və isabət işarəsi (DOM-a yalnız dəyişəndə yazılır)
   hurtT = Math.max(0, hurtT - dt * 1.6);
-  $('hurt').style.opacity = Math.max(hurtT, player.dead ? 0.55 : player.hp < 30 ? 0.25 + Math.sin(clock.elapsedTime * 5) * 0.08 : 0);
+  setOpacity('hurt', Math.max(hurtT, player.dead ? 0.55 : player.hp < 30 ? 0.25 + Math.sin(clock.elapsedTime * 5) * 0.08 : 0));
   hitmarkT = Math.max(0, hitmarkT - dt);
-  $('hitmark').style.opacity = hitmarkT > 0 ? 1 : 0;
+  setOpacity('hitmark', hitmarkT > 0 ? 1 : 0);
+  if (LOW) sun.shadow.needsUpdate = perf.frame % 2 === 0;
   renderer.render(scene, camera);
 }
 

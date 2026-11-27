@@ -305,3 +305,14 @@ body.touch:not(.menu-open) .ttop .tbtn:not(.menu) { display: none; }
 body.touch.menu-open .ttop .tbtn.menu { background: #ffd166; color: #1b2838; }
 body.touch .emote-toggle { display: none; }
 body.touch .emote-list { max-width: 90vw; justify-content: center; }
+
+/* Öldürmə lenti və FPS */
+.killfeed { position: absolute; right: 190px; top: 112px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; pointer-events: none; }
+.kf { background: #000a; color: #fff; padding: 4px 10px; border-radius: 8px; font-size: 13px; transition: opacity .6s; animation: kf-in .25s ease; }
+.kf.mine { border: 1px solid #ffd166; }
+.kf.out { opacity: 0; }
+@keyframes kf-in { from { transform: translateX(20px); } }
+.fps { position: absolute; left: 50%; top: 6px; transform: translateX(-50%); background: #0008; color: #9f9; font: 11px monospace; padding: 2px 6px; border-radius: 6px; pointer-events: none; }
+body.touch .killfeed { top: 168px; right: 8px; }
+body.touch .kf { font-size: 11px; padding: 3px 7px; }
+body.minimal-ui .killfeed { display: none; }
