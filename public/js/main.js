@@ -218,6 +218,37 @@ function handle(m) {
     case 'balls':
       play?.setBalls(m.b);
       break;
+    case 'matches':
+      setMatches(m.m);
+      break;
+    case 'mstart': {
+      const mm = matchList.find((x) => x.id === m.id);
+      if (mySide(mm)) { bigBanner('▶ BAŞLA!'); sfx.cheer(); closeMatchPanel(); }
+      break;
+    }
+    case 'mscore': {
+      const mm = matchList.find((x) => x.id === m.id);
+      if (mm) mm.score = m.score;
+      if (mySide(mm) || venuesHere().some((c) => c.id === m.id)) {
+        const c = MATCHES.find((x) => x.id === m.id);
+        const team = c?.names?.[m.side] || m.side;
+        sfx.cheer();
+        bigBanner(`${c?.title.split(' ')[0] || ''} ${m.by || team}  ${m.score.A} : ${m.score.B}`);
+      }
+      updateMatchHud(true);
+      break;
+    }
+    case 'mend': {
+      const side = m.kA.includes(state.myId) ? 'A' : m.kB.includes(state.myId) ? 'B' : null;
+      const near = venuesHere().some((c) => c.id === m.id);
+      if (side || near) {
+        bigBanner(!m.win ? `🤝 Heç-heçə ${m.score.A}:${m.score.B}`
+          : side === m.win ? `🏆 QALİB GƏLDİN! ${m.score.A}:${m.score.B}`
+          : side ? `😞 Uduzdun ${m.score.A}:${m.score.B}` : `🏆 ${m.names.join(', ')} qalib`);
+        if (side === m.win || !side) sfx.cheer();
+      }
+      break;
+    }
     case 'kickFx': {
       const o = others.get(m.id);
       if (o) { o.punchT = 0.001; sfx.kick(volumeAt(o.char.root.position)); }
@@ -664,6 +695,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'Escape' && gallows.open) { closeGallowsPanel(); return; }
+  if (e.code === 'Escape' && mpanel.open) { closeMatchPanel(); return; }
   if (e.code === 'KeyF' && (nearGallows() || gallows.open)) { gallows.open ? closeGallowsPanel() : openGallowsPanel(nearSite()); return; }
   if (e.code === 'KeyF') { if (!e.repeat) interactDown(); return; }
   if (e.code === 'Tab') {
@@ -989,15 +1021,20 @@ function findInteraction() {
   if (player.dead || state.mode !== 'game' || !world) return null;
   if (player.sitting) return { kind: 'stand', label: 'Qalx' };
   const nb = play?.nearestBall(player.pos);
-  if (nb && nb.dist < 2.0 && Math.abs(nb.ball.py - player.pos.y) < 2.2) {
-    return { kind: 'ball', ball: nb.ball, label: nb.ball.cfg.kind === 'basketball' ? 'Səbətə at — basılı saxla, ortada burax' : 'Topa vur — basılı saxla (güc)' };
+  const vb = nb?.ball.cfg.kind === 'volleyball';
+  if (nb && nb.dist < (vb ? 2.6 : 2.0) && Math.abs(nb.ball.py - player.pos.y) < (vb ? 3.2 : 2.2)) {
+    const label = vb ? (nb.ball.hold ? 'Servis — basılı saxla (güc)' : 'Topa vur!')
+      : nb.ball.cfg.kind === 'basketball' ? 'Səbətə at — basılı saxla, ortada burax' : 'Topa vur — basılı saxla (güc)';
+    return { kind: 'ball', ball: nb.ball, label };
   }
   let best = null, bd = 1.7;
   for (const s of world.seats) {
     const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
     if (d < bd) { bd = d; best = s; }
   }
-  return best ? { kind: 'sit', seat: best, label: 'Otur' } : null;
+  if (best) return { kind: 'sit', seat: best, label: 'Otur' };
+  if (!mpanel.open && venuesHere().length && !activeMyMatch()) return { kind: 'match', label: 'Matç paneli (1v1 / 2v2)' };
+  return null;
 }
 function sit(seat) {
   if (player.weapon) setWeapon(0);
@@ -1020,7 +1057,12 @@ function interactDown() {
   sfx.init();
   if (it.kind === 'sit') sit(it.seat);
   else if (it.kind === 'stand') stand();
-  else if (it.kind === 'ball') { inter.charging = true; inter.charge = 0; inter.ball = it.ball; }
+  else if (it.kind === 'match') openMatchPanel();
+  else if (it.kind === 'ball') {
+    // voleybolda top uçarkən gözləməyə vaxt yoxdur — dərhal vurulur
+    if (it.ball.cfg.kind === 'volleyball' && !it.ball.hold) { kickBall(it.ball, 0.55); return; }
+    inter.charging = true; inter.charge = 0; inter.ball = it.ball;
+  }
 }
 function interactUp() {
   if (!inter.charging) return;
@@ -1028,9 +1070,20 @@ function interactUp() {
   kickBall(inter.ball, inter.charge);
 }
 function kickBall(b, p) {
-  if (!b || player.dead || Math.hypot(b.px - player.pos.x, b.pz - player.pos.z) > 2.3) return;
+  const vb = b?.cfg.kind === 'volleyball';
+  if (!b || player.dead || Math.hypot(b.px - player.pos.x, b.pz - player.pos.z) > (vb ? 2.7 : 2.3)) return;
   let v;
-  if (b.cfg.kind === 'basketball') {
+  if (vb) {
+    // tora doğru hündür qövs; güc uçuş məsafəsini təyin edir
+    let fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
+    const side = mySide(matchList.find((m) => m.id === 'volleyball' && m.state === 'play'));
+    if (side) {
+      const want = side === 'A' ? 1 : -1; // A komandası z-in kiçik tərəfindədir, rəqib +z tərəfdə
+      if (fz * want < 0.55) { fz = want * 0.8; fx = Math.sign(fx || 1) * 0.6; }
+    }
+    const d = 6 + 7 * p, T = 1.3 + 0.3 * p;
+    v = [(fx * d) / T, (0.15 - b.py + 0.5 * BALL_G * T * T) / T, (fz * d) / T];
+  } else if (b.cfg.kind === 'basketball') {
     // halqaya parabola; güc zolağının ortası (p≈0.5) dəqiq atışdır
     const h = b.cfg.hoop;
     // simulyasiya ilə sınanıb: güc 0.44–0.56 aralığında demək olar həmişə səbət, 0.4/0.6-da ~35%
@@ -1066,6 +1119,121 @@ function updateInteractions(dt) {
   play?.update(dt, clock.elapsedTime, player.pos, !player.dead && state.mode === 'game', send);
 }
 
+// ---------- Matçlar (futbol / basketbol / voleybol — 1v1, 2v2) ----------
+const MATCHES = CAMPUS.matches || [];
+const TEAM_COL = { A: '#3a86ff', B: '#e63946' };
+let matchList = [];
+const mpanel = { open: false, mode: {} };
+const mySide = (m) => (!m ? null : m.kA.includes(state.myId) ? 'A' : m.kB.includes(state.myId) ? 'B' : null);
+const myMatch = () => matchList.find((m) => mySide(m));
+const activeMyMatch = () => { const m = myMatch(); return m && (m.state === 'count' || m.state === 'play') ? m : null; };
+function venuesHere() {
+  const p = player.pos;
+  return MATCHES.filter((c) => p.x >= c.area.minX && p.x <= c.area.maxX && p.z >= c.area.minZ && p.z <= c.area.maxZ);
+}
+function setMatches(list) {
+  const now = performance.now();
+  matchList = list.map((m) => ({ ...m, endsAtL: now + m.left * 1000, startAtL: now + m.start * 1000 }));
+  if (mpanel.open) renderMatchPanel();
+  updateMatchHud(true);
+}
+function sendMatch(act, id, team, mode) { send({ t: 'match', act, id, team, mode }); }
+function openMatchPanel() {
+  mpanel.open = true;
+  if (document.pointerLockElement) document.exitPointerLock();
+  renderMatchPanel();
+}
+function closeMatchPanel() { mpanel.open = false; $('match-panel').hidden = true; }
+$('mp-close').onclick = closeMatchPanel;
+$('mchip').onclick = () => (mpanel.open ? closeMatchPanel() : openMatchPanel());
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function renderMatchPanel() {
+  const here = venuesHere(), mine = myMatch();
+  const cfgs = MATCHES.filter((c) => here.includes(c) || mine?.id === c.id);
+  if (!cfgs.length) { closeMatchPanel(); return; }
+  $('match-panel').hidden = false;
+  const box = $('mp-list');
+  box.replaceChildren();
+  for (const c of cfgs) {
+    const m = matchList.find((x) => x.id === c.id) || { state: 'idle', mode: 0, A: [], B: [], kA: [], kB: [], score: { A: 0, B: 0 } };
+    const side = mySide(m);
+    const card = el('div', 'mp-card');
+    const st = { idle: 'Boşdur', wait: `${m.mode}v${m.mode} — oyunçu gözlənilir`, count: 'Başlayır…', play: `Gedir · ${m.score.A}:${m.score.B}`, end: `Bitdi · ${m.score.A}:${m.score.B}` }[m.state];
+    const head = el('div', 'mp-title');
+    head.append(el('b', null, c.title), el('span', 'mp-state ' + m.state, st));
+    card.append(head, el('div', 'mp-sub', `İlk ${c.target} xal · ${Math.round(c.time / 60 * 10) / 10} dəq`));
+    const open = m.state === 'idle' || m.state === 'wait' || m.state === 'end';
+    let mode = m.state === 'wait' ? m.mode : (mpanel.mode[c.id] || 1);
+    if (m.state === 'idle' || m.state === 'end') {
+      const row = el('div', 'mp-modes');
+      for (const n of [1, 2]) {
+        const b = el('button', 'mp-mode' + (mode === n ? ' on' : ''), `${n}v${n}`);
+        b.type = 'button';
+        b.onclick = () => { mpanel.mode[c.id] = n; renderMatchPanel(); };
+        row.append(b);
+      }
+      card.append(row);
+    }
+    const teams = el('div', 'mp-teams');
+    for (const t of ['A', 'B']) {
+      const col = el('div', 'mp-team');
+      col.style.borderColor = TEAM_COL[t];
+      const names = m[t] || [];
+      col.append(el('div', 'mp-tname', c.names?.[t] || t));
+      for (let i = 0; i < Math.max(mode, names.length); i++) col.append(el('div', 'mp-slot' + (names[i] ? '' : ' empty'), names[i] || '— boş —'));
+      if (open && side !== t && names.length < mode) {
+        const j = el('button', 'mp-join', side ? 'Bura keç' : 'Qoşul');
+        j.type = 'button';
+        j.style.background = TEAM_COL[t];
+        j.onclick = () => sendMatch('join', c.id, t, mode);
+        col.append(j);
+      }
+      teams.append(col);
+    }
+    card.append(teams);
+    if (side) {
+      const l = el('button', 'ghost mp-leave', m.state === 'play' || m.state === 'count' ? '🏳 Təslim ol / çıx' : 'Növbədən çıx');
+      l.type = 'button';
+      l.onclick = () => sendMatch('leave', c.id);
+      card.append(l);
+    }
+    box.append(card);
+  }
+}
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+let mhudText = '', mhudT = 0;
+function updateMatchHud(force) {
+  mhudT -= 1 / 60;
+  if (!force && mhudT > 0) return;
+  mhudT = 0.2;
+  const here = venuesHere();
+  const m = activeMyMatch() || matchList.find((x) => (x.state === 'play' || x.state === 'count' || x.state === 'end') && here.some((c) => c.id === x.id));
+  let html = '';
+  if (m) {
+    const c = MATCHES.find((x) => x.id === m.id);
+    const now = performance.now();
+    const t = m.state === 'count' ? `Başlayır: ${Math.max(0, Math.ceil((m.startAtL - now) / 1000))}`
+      : m.state === 'play' ? `⏱ ${fmtTime(Math.max(0, (m.endsAtL - now) / 1000))}` : 'Bitdi';
+    const side = mySide(m);
+    html = `<span class="mh-title">${c.title}</span>`
+      + `<span class="mh-team" style="background:${TEAM_COL.A}">${c.names.A}${side === 'A' ? ' (sən)' : ''}</span>`
+      + `<b class="mh-score">${m.score.A} : ${m.score.B}</b>`
+      + `<span class="mh-team" style="background:${TEAM_COL.B}">${c.names.B}${side === 'B' ? ' (sən)' : ''}</span>`
+      + `<span class="mh-time">${t}</span>`;
+  }
+  if (html !== mhudText) { mhudText = html; $('mhud').innerHTML = html; $('mhud').hidden = !html; }
+  const chip = here.length > 0 && !mpanel.open && !activeMyMatch();
+  if ($('mchip').hidden === chip) $('mchip').hidden = !chip;
+  // paneldən uzaqlaşanda bağla
+  if (mpanel.open && !here.length && !myMatch()) closeMatchPanel();
+}
+
 // ---------- Liderlər cədvəli (Tab) və böyük elan ----------
 function renderBoard(rows) {
   const tb = $('board-rows');
@@ -1073,7 +1241,7 @@ function renderBoard(rows) {
   rows.forEach((r, i) => {
     const tr = document.createElement('tr');
     if (r.me) tr.className = 'me';
-    for (const v of [i + 1, `${r.online ? '🟢' : '⚪'} ${r.name}`, r.level, r.kills, r.deaths, r.stars, r.goals]) {
+    for (const v of [i + 1, `${r.online ? '🟢' : '⚪'} ${r.name}`, r.level, r.kills, r.deaths, r.stars, r.goals, r.wins ?? 0]) {
       const td = document.createElement('td');
       td.textContent = v;
       tr.append(td);
@@ -1205,6 +1373,7 @@ function frame(dt) {
   updateStaticNpcs(dt, clock.elapsedTime);
   updateGallowsUi();
   updateInteractions(dt);
+  updateMatchHud();
   updateCamera(dt);
   world.update(clock.elapsedTime, dt, camera);
   updateBirds?.(clock.elapsedTime, dt);

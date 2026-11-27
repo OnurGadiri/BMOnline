@@ -19,7 +19,7 @@ const serverReady = new Promise((res) => server.stdout.on('data', (d) => { if (S
 const cleanup = () => { server.kill(); fs.rmSync(dataDir, { recursive: true, force: true }); };
 
 const results = [];
-const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', name, extra]); };
+const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', name, extra]); if (process.env.VERBOSE) console.log(cond ? 'PASS' : 'FAIL', name); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class Client {
@@ -169,7 +169,7 @@ async function enter(name, pin = '1234') {
   // --- 7. Yumruq ---
   await sleep(3200); // B-nin qoruması bitsin
   A.c.w = 0;
-  A.c.pos = await A.c.walkTo(A.c.pos, { x: B.c.pos.x, z: B.c.pos.z - 1.2 });
+  A.c.pos = await A.c.walkTo(A.c.pos, { x: B.c.pos.x, z: B.c.pos.z - 1.2 }, 9);
   // B-yə tərəf dön (z oxu boyunca +)
   A.c.send({ t: 'pos', x: A.c.pos.x, y: 0, z: A.c.pos.z, ry: 0, m: 0, e: 0, w: 0 });
   await sleep(150);
@@ -251,6 +251,33 @@ async function enter(name, pin = '1234') {
   A.c.send({ t: 'pos', x: A.c.pos.x, y: 0, z: A.c.pos.z, ry: 0, m: 0, e: 5, w: 0 });
   const sitSnap = await B.c.waitT('snap', 1500, (m) => m.e.some((r) => r[0] === 'alfa' && r[6] === 5));
   ok('oturmaq digərlərinə görünür', !!sitSnap);
+
+  // --- 8b. Matç: voleybol 1v1 ---
+  const waitM = (c, pred, ms = 2500) => c.waitT('matches', ms, (m) => { const v = m.m.find((x) => x.id === 'volleyball'); return v && pred(v); });
+  const w1 = waitM(A.c, (v) => v.state === 'wait' && v.A.includes('Alfa'));
+  A.c.send({ t: 'match', act: 'join', id: 'volleyball', team: 'A', mode: 1 });
+  ok('matça qoşulmaq (növbə)', !!(await w1));
+  const corrA = A.c.waitT('correct', 2500);
+  const cnt = waitM(A.c, (v) => v.state === 'count');
+  B.c.send({ t: 'match', act: 'join', id: 'volleyball', team: 'B', mode: 1 });
+  ok('hər iki komanda dolanda geri sayım başlayır', !!(await cnt));
+  const cA = await corrA;
+  ok('oyunçular öz meydança tərəfinə köçürülür', !!cA && cA.z < -240.2, cA ? `${cA.x},${cA.z}` : '');
+  const started = await A.c.waitT('mstart', 7000);
+  ok('matç başlayır', !!started);
+  await sleep(150);
+  const vRow = A.c.msgs.filter((m) => m.t === 'balls').pop().b.find((r) => r[0] === 'volley');
+  ok('voleybol topu servis üçün havada gözləyir', vRow && vRow[7] === 1 && vRow[2] > 1.5, JSON.stringify(vRow));
+  // servis: rəqibin meydançasına
+  const scoreA = A.c.waitT('mscore', 4000, (m) => m.id === 'volleyball');
+  const T = 1.4, dz = -236 - vRow[3], dx = 74 - vRow[1];
+  A.c.send({ t: 'kick', id: 'volley', v: [dx / T, (0.15 - vRow[2] + 6 * T * T) / T, dz / T] });
+  const sc = await scoreA;
+  ok('top rəqib meydançasına düşəndə xal verilir', sc?.side === 'A' && sc.score.A === 1, JSON.stringify(sc?.score));
+  const ended = A.c.waitT('mend', 2500, (m) => m.id === 'volleyball');
+  B.c.send({ t: 'match', act: 'leave', id: 'volleyball' });
+  const en = await ended;
+  ok('rəqib çıxanda matç bitir (texniki qələbə)', en?.win === 'A');
 
   // --- 9. Eyni hesabla ikinci giriş, çıxış → NPC ---
   const kicked = B.c.waitT('kicked', 3000);

@@ -14,6 +14,13 @@ function ballTexture(kind) {
     g.beginPath(); g.moveTo(0, 64); g.lineTo(256, 64); g.stroke();
     for (const x of [64, 192]) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 128); g.stroke(); }
     for (const x of [0, 128, 256]) { g.beginPath(); g.ellipse(x, 64, 34, 64, 0, 0, Math.PI * 2); g.stroke(); }
+  } else if (kind === 'volleyball') {
+    // ağ-sarı-göy panellər
+    const cols = ['#f5f5f0', '#f2c230', '#2f6fd1'];
+    for (let i = 0; i < 6; i++) { g.fillStyle = cols[i % 3]; g.fillRect((i * 256) / 6, 0, 256 / 6 + 1, 128); }
+    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 2;
+    for (let i = 0; i <= 6; i++) { g.beginPath(); g.moveTo((i * 256) / 6, 0); g.lineTo((i * 256) / 6, 128); g.stroke(); }
+    g.beginPath(); g.moveTo(0, 64); g.lineTo(256, 64); g.stroke();
   } else {
     g.fillStyle = '#f7f7f7'; g.fillRect(0, 0, 256, 128);
     g.fillStyle = '#1b1b1b';
@@ -52,7 +59,7 @@ export class Play {
       mesh.castShadow = true;
       mesh.position.set(b.x, b.r, b.z);
       scene.add(mesh);
-      this.balls.set(b.id, { cfg: b, mesh, px: b.x, py: b.r, pz: b.z, vx: 0, vy: 0, vz: 0 });
+      this.balls.set(b.id, { cfg: b, mesh, px: b.x, py: b.r, pz: b.z, vx: 0, vy: 0, vz: 0, hold: false });
     }
     this.stars = new Map();
     this.starGeo = starGeometry();
@@ -62,9 +69,10 @@ export class Play {
 
   // ---- toplar ----
   setBalls(rows) {
-    for (const [id, px, py, pz, vx, vy, vz] of rows) {
+    for (const [id, px, py, pz, vx, vy, vz, hold] of rows) {
       const b = this.balls.get(id);
       if (!b) continue;
+      b.hold = !!hold;
       const err = Math.hypot(px - b.px, py - b.py, pz - b.pz);
       const k = err > 1.5 ? 1 : 0.4; // böyük fərqdə birbaşa, kiçikdə yumşaq düzəliş
       b.px += (px - b.px) * k; b.py += (py - b.py) * k; b.pz += (pz - b.pz) * k;
@@ -81,13 +89,20 @@ export class Play {
   }
   stepBall(b, dt, listenerPos) {
     const c = b.cfg;
+    if (b.hold) return;
+    const prev = b.pz, prevY = b.py;
     const vy0 = b.vy;
     b.vy -= BALL_G * dt;
     b.px += b.vx * dt; b.py += ((vy0 + b.vy) / 2) * dt; b.pz += b.vz * dt; // serverlə eyni inteqrasiya
+    const n = c.net;
+    if (n && (prev - n.z) * (b.pz - n.z) < 0 && b.px > n.x1 && b.px < n.x2 && Math.min(prevY, b.py) < n.top) {
+      b.pz = n.z + Math.sign(prev - n.z) * (c.r + 0.02);
+      b.vz = -b.vz * 0.3; b.vx *= 0.6;
+    }
     if (b.py < c.r) {
       const hit = -b.vy;
       b.py = c.r;
-      if (b.vy < 0) b.vy = -b.vy * (c.kind === 'basketball' ? 0.72 : 0.55);
+      if (b.vy < 0) b.vy = -b.vy * (c.kind === 'basketball' ? 0.72 : c.kind === 'volleyball' ? 0.6 : 0.55);
       if (b.vy < 0.8) b.vy = 0;
       const f = Math.max(0, 1 - (c.kind === 'basketball' ? 1.6 : 1.1) * dt);
       b.vx *= f; b.vz *= f;

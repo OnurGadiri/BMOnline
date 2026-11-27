@@ -85,6 +85,15 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   a kick and release to shoot in the direction you are looking. Goals are announced to everyone (+15 XP).
 - **Basketball:** hold **F** next to the ball on the volleyball court and release in the middle of the
   power bar to shoot at the hoop on the wall (+10 XP per basket).
+- **Volleyball:** a ball with a real net on the volleyball court. Press **F** to hit it over the net
+  (hold **F** to charge a serve).
+- **Matches (1v1 / 2v2):** inside the football pitch or the volleyball/basketball court, press **F**
+  (or the 🏟 Matç button) to open the match panel, pick 1v1 or 2v2 and join the blue or red team. When
+  both teams are full the match starts after a 5-second countdown, players are moved to their side and
+  only match players can touch the ball. Football: first to 3 goals (3 min); basketball: first to 5
+  baskets (2.5 min); volleyball: first to 7 points (4 min) — the ball landing in a side's court is a
+  point for the other side, out of bounds is a point against the hitter. Winners get +40 XP and a win
+  on the leaderboard (🏆); leaving a running match forfeits it.
 - **Stars:** 18 golden stars are scattered around the campus (also shown on the minimap). Touch one to
   collect it (+5 XP); it reappears somewhere else after 45 seconds.
 - **Leaderboard:** hold **Tab** to see the top players (level, kills, deaths, stars, goals/baskets).

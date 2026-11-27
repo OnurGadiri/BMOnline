@@ -310,16 +310,24 @@ function respawn(e) {
 
 // ---------- Toplar (futbol, basketbol) — server fizikası ----------
 const BALL_G = 12;
-const balls = (CAMPUS.balls || []).map((b) => ({ ...b, px: b.x, py: b.r, pz: b.z, vx: 0, vy: 0, vz: 0, lastKick: null, resetAt: 0, dirty: true }));
-const ballState = () => ({ t: 'balls', b: balls.map((b) => [b.id, ...[b.px, b.py, b.pz, b.vx, b.vy, b.vz].map((v) => +v.toFixed(3))]) });
+const balls = (CAMPUS.balls || []).map((b) => ({ ...b, px: b.x, py: b.r, pz: b.z, vx: 0, vy: 0, vz: 0, lastKick: null, resetAt: 0, hold: false, serve: null, dirty: true }));
+const ballState = () => ({ t: 'balls', b: balls.map((b) => [b.id, ...[b.px, b.py, b.pz, b.vx, b.vy, b.vz].map((v) => +v.toFixed(3)), b.hold ? 1 : 0]) });
 
 function stepBall(b, dt) {
+  if (b.hold) return; // voleybolda servis gözləyir — havada dayanır
   const prev = { x: b.px, y: b.py, z: b.pz };
   // sabit cazibə üçün dəqiq inteqrasiya: mövqe orta sürətlə dəyişir
   const vy0 = b.vy;
   b.vy -= BALL_G * dt;
   b.px += b.vx * dt; b.py += ((vy0 + b.vy) / 2) * dt; b.pz += b.vz * dt;
-  const bounce = b.kind === 'basketball' ? 0.72 : 0.55;
+  const bounce = b.kind === 'basketball' ? 0.72 : b.kind === 'volleyball' ? 0.6 : 0.55;
+  // voleybol toru: top torun altından/içindən keçə bilməz
+  const n = b.net;
+  if (n && (prev.z - n.z) * (b.pz - n.z) < 0 && b.px > n.x1 && b.px < n.x2 && Math.min(prev.y, b.py) < n.top) {
+    b.pz = n.z + Math.sign(prev.z - n.z) * (b.r + 0.02);
+    b.vz = -b.vz * 0.3; b.vx *= 0.6;
+  }
+  if (b.py < b.r && b.kind === 'volleyball' && b.vy < -1 && !b.resetAt) volleyLanded(b);
   if (b.py < b.r) {
     b.py = b.r;
     if (b.vy < 0) b.vy = -b.vy * bounce;
@@ -330,7 +338,7 @@ function stepBall(b, dt) {
   // qol: top qapının ağzından xətti keçir
   for (const g of b.goals || []) {
     const crossed = (prev.z - g.z) * (b.pz - g.z) < 0;
-    if (crossed && Math.abs(b.px - g.x) < g.half - b.r && b.py < g.h && !b.resetAt) score(b, 'goal');
+    if (crossed && Math.abs(b.px - g.x) < g.half - b.r && b.py < g.h && !b.resetAt) score(b, 'goal', b.goals.indexOf(g));
   }
   // səbət: top halqanın içindən aşağı düşür
   const h = b.hoop;
@@ -350,7 +358,9 @@ function stepBall(b, dt) {
   if (b.vx || b.vy || b.vz) b.dirty = true;
 }
 
-function score(b, kind) {
+function score(b, kind, goalIdx = -1) {
+  const mt = matchForBall(b);
+  if (mt) return matchScore(mt, b, kind, goalIdx);
   b.resetAt = Date.now() + (kind === 'goal' ? 2500 : 0);
   const who = b.lastKick && db.accounts[b.lastKick];
   const name = who ? who.name : 'Kimsə';
@@ -370,12 +380,13 @@ setInterval(() => {
   const dt = 1 / 30, now = Date.now();
   for (const b of balls) {
     if (b.resetAt && now > b.resetAt) {
-      Object.assign(b, { px: b.x, py: b.r + 0.5, pz: b.z, vx: 0, vy: 0, vz: 0, resetAt: 0, dirty: true });
+      const sv = b.serve; // matçda voleybol: növbəti servisi vuran komandanın tərəfində havada dayanır
+      Object.assign(b, { px: sv ? sv.x : b.x, py: sv ? 1.9 : b.r + 0.5, pz: sv ? sv.z : b.z, vx: 0, vy: 0, vz: 0, resetAt: 0, hold: !!sv, serve: null, dirty: true });
     }
     // futbol: üstündən qaçan oyunçu topu qabağına itələyir (dribl)
     if (b.kind === 'football' && b.py < 0.7) {
       for (const e of entities.values()) {
-        if (!e.online || e.dead || !e.moving) continue;
+        if (!e.online || e.dead || !e.moving || !canTouchBall(e.key, b)) continue;
         const dx = b.px - e.x, dz = b.pz - e.z, d = Math.hypot(dx, dz);
         if (d < 0.75 && d > 0.01) {
           const sp = Math.hypot(b.vx, b.vz);
@@ -386,6 +397,166 @@ setInterval(() => {
     stepBall(b, dt);
   }
 }, 1000 / 30);
+
+// ---------- Matçlar: futbol / basketbol / voleybol — 1v1 və 2v2 ----------
+// Vəziyyətlər: idle → wait (komandalar yığılır) → count (5 san geri sayım) → play → end (6 san nəticə) → idle
+const matches = (CAMPUS.matches || []).map((c) => ({ cfg: c, mode: 0, state: 'idle', A: [], B: [], score: { A: 0, B: 0 }, endsAt: 0, startAt: 0, endAt: 0, win: null }));
+const matchById = (id) => matches.find((mt) => mt.cfg.id === id);
+const teamOf = (mt, key) => (key && mt.A.includes(key) ? 'A' : key && mt.B.includes(key) ? 'B' : null);
+const matchOf = (key) => matches.find((mt) => teamOf(mt, key));
+const nameOf = (k) => db.accounts[k]?.name || '?';
+const ballOf = (mt) => balls.find((x) => x.id === mt.cfg.ball);
+function matchForBall(b) { return matches.find((mt) => mt.state === 'play' && mt.cfg.ball === b.id) || null; }
+/** Matç gedəndə topa yalnız həmin matçın oyunçuları toxuna bilər */
+function canTouchBall(key, b) {
+  const mt = matches.find((x) => (x.state === 'play' || x.state === 'count') && x.cfg.ball === b.id);
+  return !mt || !!teamOf(mt, key);
+}
+function matchState() {
+  const now = Date.now();
+  return {
+    t: 'matches',
+    m: matches.map((mt) => ({
+      id: mt.cfg.id, mode: mt.mode, state: mt.state, A: mt.A.map(nameOf), B: mt.B.map(nameOf), kA: mt.A, kB: mt.B,
+      score: mt.score, win: mt.win,
+      left: mt.state === 'play' ? Math.max(0, (mt.endsAt - now) / 1000) : 0,
+      start: mt.state === 'count' ? Math.max(0, (mt.startAt - now) / 1000) : 0,
+    })),
+  };
+}
+const pushMatches = () => broadcast(matchState());
+
+function placeTeams(mt) {
+  for (const side of ['A', 'B']) {
+    mt[side].forEach((k, i) => {
+      const e = entities.get(k);
+      const sp = mt.cfg.spawns[side][i % mt.cfg.spawns[side].length];
+      if (!e || e.dead) return;
+      e.x = sp[0]; e.z = sp[1]; e.y = 0; e.emote = 0;
+      const ws = sockets.get(k);
+      if (ws) { ws.lastPosAt = Date.now(); send(ws, { t: 'correct', x: e.x, y: 0, z: e.z }); }
+    });
+  }
+}
+/** Voleybol servis nöqtəsi: komandanın öz yarısında, arxa xəttə yaxın */
+function serveSpot(b, side) {
+  const c = b.court, mid = b.net.z;
+  return { x: (c.minX + c.maxX) / 2, z: side === 'A' ? Math.max(c.minZ + 1.5, mid - 6.5) : Math.min(c.maxZ - 1.5, mid + 6.5) };
+}
+function resetMatchBall(mt, serveSide) {
+  const b = ballOf(mt);
+  if (!b) return;
+  if (b.kind === 'volleyball') {
+    const s = serveSpot(b, serveSide);
+    Object.assign(b, { px: s.x, py: 1.9, pz: s.z, hold: true });
+  } else Object.assign(b, { px: b.x, py: b.r + 0.5, pz: b.z, hold: false });
+  Object.assign(b, { vx: 0, vy: 0, vz: 0, resetAt: 0, serve: null, lastKick: null, dirty: true });
+}
+function joinMatch(ws, id, team, mode) {
+  const mt = matchById(id), key = ws.key;
+  if (!mt || (team !== 'A' && team !== 'B')) return;
+  if (mt.state === 'play' || mt.state === 'count') return send(ws, { t: 'sys', msg: '⏳ Matç artıq başlayıb — bitəndə qoşula bilərsən.' });
+  const e = entities.get(key);
+  if (!e || e.dead) return;
+  const cur = matchOf(key);
+  if (cur && cur !== mt) leaveMatch(key, '', true);
+  if (mt.state === 'idle' || mt.state === 'end') Object.assign(mt, { mode: mode === 2 ? 2 : 1, state: 'wait', A: [], B: [], score: { A: 0, B: 0 }, win: null });
+  if (mt[team].includes(key)) return;
+  if (mt[team].length >= mt.mode) return send(ws, { t: 'sys', msg: 'Bu komanda doludur — o biri komandaya qoşul.' });
+  const other = team === 'A' ? 'B' : 'A';
+  mt[other] = mt[other].filter((k) => k !== key);
+  mt[team].push(key);
+  if (mt.A.length === mt.mode && mt.B.length === mt.mode) {
+    mt.state = 'count';
+    mt.startAt = Date.now() + 5000;
+    placeTeams(mt);
+    resetMatchBall(mt, 'A');
+    broadcast({ t: 'sys', msg: `${mt.cfg.title} ${mt.mode}v${mt.mode}: ${mt.A.map(nameOf).join(', ')} 🆚 ${mt.B.map(nameOf).join(', ')} — 5 saniyəyə başlayır!` });
+  }
+  pushMatches();
+}
+function leaveMatch(key, why = '', silent = false) {
+  for (const mt of matches) {
+    const side = teamOf(mt, key);
+    if (!side) continue;
+    mt[side] = mt[side].filter((k) => k !== key);
+    if (mt.state === 'play' || mt.state === 'count') {
+      // komandada kimsə qalmadısa — o biri komanda texniki qalib
+      if (!mt[side].length) endMatch(mt, side === 'A' ? 'B' : 'A', `${nameOf(key)} ${why || 'matçdan çıxdı'}`);
+    } else if (!mt.A.length && !mt.B.length) Object.assign(mt, { state: 'idle', mode: 0 });
+    if (!silent) pushMatches();
+  }
+}
+function matchScore(mt, b, kind, goalIdx) {
+  let side = null;
+  if (kind === 'goal') side = goalIdx === 0 ? 'B' : 'A'; // A komandası z=1 qapısını qoruyur
+  else if (kind === 'basket') side = teamOf(mt, b.lastKick);
+  else side = kind; // voleybol: xalı qazanan tərəf ('A' / 'B')
+  const acc = b.lastKick && db.accounts[b.lastKick];
+  if (kind === 'goal') {
+    b.resetAt = Date.now() + 2000;
+    if (acc && teamOf(mt, b.lastKick) === side) { acc.goals = (acc.goals || 0) + 1; addXp(b.lastKick, 10); }
+  } else if (kind === 'basket') {
+    b.resetAt = Date.now() + 600;
+    if (acc && side) { acc.baskets = (acc.baskets || 0) + 1; addXp(b.lastKick, 6); }
+  }
+  if (!side) return;
+  mt.score[side]++;
+  broadcast({ t: 'mscore', id: mt.cfg.id, side, by: acc && teamOf(mt, b.lastKick) === side ? acc.name : '', kind, score: mt.score });
+  if (mt.score[side] >= mt.cfg.target) endMatch(mt, side);
+  pushMatches();
+}
+/** Voleybol topu yerə düşdü: meydançanın içinə düşübsə həmin tərəf xal itirir, kənara düşübsə son vuran komanda */
+function volleyLanded(b) {
+  const mt = matchForBall(b);
+  if (!mt) return;
+  const c = b.court;
+  const inside = b.px >= c.minX && b.px <= c.maxX && b.pz >= c.minZ && b.pz <= c.maxZ;
+  const landSide = b.pz < b.net.z ? 'A' : 'B';
+  const hitter = teamOf(mt, b.lastKick);
+  const loser = inside ? landSide : hitter || landSide;
+  const winner = loser === 'A' ? 'B' : 'A';
+  b.resetAt = Date.now() + 1800;
+  b.serve = serveSpot(b, winner); // xalı qazanan servis vurur
+  matchScore(mt, b, winner, -1);
+}
+function endMatch(mt, win, reason = '') {
+  if (mt.state === 'end' || mt.state === 'idle') return;
+  const t = mt.cfg.title, sc = `${mt.score.A}:${mt.score.B}`;
+  if (win) {
+    const lose = win === 'A' ? 'B' : 'A';
+    for (const k of mt[win]) { const a = db.accounts[k]; if (a) { a.wins = (a.wins || 0) + 1; addXp(k, 40); } }
+    for (const k of mt[lose]) addXp(k, 10);
+    broadcast({ t: 'sys', msg: `🏆 ${t}: ${mt[win].map(nameOf).join(', ') || mt.cfg.names[win]} qalib gəldi (${sc})${reason ? ' — ' + reason : ''}! +40 XP` });
+  } else {
+    for (const k of [...mt.A, ...mt.B]) addXp(k, 15);
+    broadcast({ t: 'sys', msg: `🤝 ${t}: heç-heçə (${sc}) — hər kəsə +15 XP` });
+  }
+  broadcast({ t: 'mend', id: mt.cfg.id, win, names: win ? mt[win].map(nameOf) : [], score: mt.score, kA: mt.A, kB: mt.B });
+  Object.assign(mt, { state: 'end', endAt: Date.now() + 6000, win });
+  const b = ballOf(mt);
+  if (b) Object.assign(b, { serve: null, hold: false, resetAt: Date.now() + 2500, dirty: true });
+  scheduleSave();
+}
+setInterval(() => {
+  const now = Date.now();
+  let changed = false;
+  for (const mt of matches) {
+    if (mt.state === 'count' && now >= mt.startAt) {
+      Object.assign(mt, { state: 'play', endsAt: now + mt.cfg.time * 1000, score: { A: 0, B: 0 } });
+      resetMatchBall(mt, 'A');
+      broadcast({ t: 'mstart', id: mt.cfg.id });
+      changed = true;
+    } else if (mt.state === 'play' && now >= mt.endsAt) {
+      endMatch(mt, mt.score.A > mt.score.B ? 'A' : mt.score.B > mt.score.A ? 'B' : null, 'vaxt bitdi');
+      changed = true;
+    } else if (mt.state === 'end' && now >= mt.endAt) {
+      Object.assign(mt, { state: 'idle', mode: 0, A: [], B: [], win: null });
+      changed = true;
+    }
+  }
+  if (changed) pushMatches();
+}, 250);
 
 // ---------- Ulduzlar (toplanan bonuslar) ----------
 const stars = new Map();
@@ -413,6 +584,7 @@ function goOffline(key) {
   if (!e || !e.online) return;
   e.online = false;
   e.w = 0;
+  leaveMatch(key, 'oyundan çıxdı');
   if (!e.dead) startAI(e); // ölüdürsə, yenidən doğulanda AI başlayır
   broadcast({ t: 'entity', e: publicEntity(e) });
   broadcast({ t: 'sys', msg: `${e.name} oyundan çıxdı — xarakteri kampusda gəzməyə davam edir.` });
@@ -541,6 +713,7 @@ wss.on('connection', (ws, req) => {
       broadcast({ t: 'sys', msg: `${acc.name} kampusa gəldi.` }, ws);
       send(ws, gallowsState());
       send(ws, ballState());
+      send(ws, matchState());
       send(ws, { t: 'stars', s: [...stars.values()] });
       send(ws, { t: 'ammo', ammo: ws.ammo });
       if (e.dead) send(ws, { t: 'dead', id: e.key, by: '', weapon: '', respawn: Math.max(0, e.respawnAt - Date.now()) });
@@ -607,18 +780,27 @@ wss.on('connection', (ws, req) => {
       const b = balls.find((x) => x.id === m.id);
       const now = Date.now();
       if (!e || e.dead || !b || b.resetAt || now - (ws.lastKick || 0) < 350) return;
-      if (Math.hypot(b.px - e.x, b.pz - e.z) > 2.3 || Math.abs(b.py - (e.y + 0.9)) > 2.4) return;
+      if (!canTouchBall(e.key, b)) return send(ws, { t: 'sys', msg: '⛔ Burada matç gedir — topa yalnız oyunçular toxuna bilər.' });
+      const vb = b.kind === 'volleyball';
+      if (Math.hypot(b.px - e.x, b.pz - e.z) > (vb ? 2.8 : 2.3) || Math.abs(b.py - (e.y + 0.9)) > (vb ? 2.8 : 2.4)) return;
       let v = vec3(m.v);
       if (!v) return;
       const sp = Math.hypot(...v), max = b.kind === 'basketball' ? 20 : 24;
       if (sp > max) v = v.map((c) => (c * max) / sp);
       ws.lastKick = now;
       [b.vx, b.vy, b.vz] = v;
+      b.hold = false;
       if (b.py < b.r + 0.05) b.py = b.r + 0.05;
       b.lastKick = e.key;
       e.emote = 0;
       broadcast(ballState());
       broadcast({ t: 'kickFx', id: e.key, ball: b.id }, ws);
+      return;
+    }
+
+    if (m.t === 'match' && ws.inGame) {
+      if (m.act === 'join') joinMatch(ws, String(m.id), m.team, Number(m.mode));
+      else if (m.act === 'leave') leaveMatch(ws.key, 'matçdan çıxdı');
       return;
     }
 
@@ -641,7 +823,7 @@ wss.on('connection', (ws, req) => {
       const rows = Object.entries(db.accounts)
         .filter(([, a]) => a.appearance)
         .map(([k, a]) => ({ name: a.name, level: a.level, xp: a.xp, kills: a.kills || 0, deaths: a.deaths || 0, stars: a.stars || 0,
-          goals: (a.goals || 0) + (a.baskets || 0), online: !!entities.get(k)?.online, me: k === ws.key }))
+          goals: (a.goals || 0) + (a.baskets || 0), wins: a.wins || 0, online: !!entities.get(k)?.online, me: k === ws.key }))
         .sort((p, q) => q.level - p.level || q.xp - p.xp)
         .slice(0, 12);
       return send(ws, { t: 'board', rows });

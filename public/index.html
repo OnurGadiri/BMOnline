@@ -111,9 +111,16 @@
     <div id="board" class="board" hidden>
       <div class="board-title">🏆 Liderlər</div>
       <table>
-        <thead><tr><th>#</th><th>Oyunçu</th><th>Lv</th><th>🔫</th><th>💀</th><th>⭐</th><th>⚽🏀</th></tr></thead>
+        <thead><tr><th>#</th><th>Oyunçu</th><th>Lv</th><th>🔫</th><th>💀</th><th>⭐</th><th>⚽🏀</th><th>🏆</th></tr></thead>
         <tbody id="board-rows"></tbody>
       </table>
+    </div>
+    <div id="mhud" class="mhud" hidden></div>
+    <button type="button" id="mchip" class="mchip" hidden>🏟 Matç <small>(F)</small></button>
+    <div id="match-panel" class="gpanel mpanel" hidden>
+      <div class="gp-head"><b>🏟 Matçlar</b><button id="mp-close" class="icon" type="button" title="Bağla (Esc)">✕</button></div>
+      <div id="mp-list"></div>
+      <p class="tip">Rejimi seç (1v1 / 2v2) və komandaya qoşul. Hər iki komanda dolanda matç 5 saniyəyə başlayır. Qaliblərə +40 XP.</p>
     </div>
     <div id="gallows-panel" class="gpanel" hidden>
       <div class="gp-head"><b id="gp-title">⚖ Dar ağacı</b><button id="gp-close" class="icon" type="button" title="Bağla (Esc)">✕</button></div>

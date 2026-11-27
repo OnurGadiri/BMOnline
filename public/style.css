@@ -312,7 +312,41 @@ body.touch .emote-list { max-width: 90vw; justify-content: center; }
 .kf.mine { border: 1px solid #ffd166; }
 .kf.out { opacity: 0; }
 @keyframes kf-in { from { transform: translateX(20px); } }
-.fps { position: absolute; left: 50%; top: 6px; transform: translateX(-50%); background: #0008; color: #9f9; font: 11px monospace; padding: 2px 6px; border-radius: 6px; pointer-events: none; }
+.fps { position: absolute; right: 8px; bottom: 4px; background: #0008; color: #9f9; font: 11px monospace; padding: 2px 6px; border-radius: 6px; pointer-events: none; }
 body.touch .killfeed { top: 168px; right: 8px; }
 body.touch .kf { font-size: 11px; padding: 3px 7px; }
 body.minimal-ui .killfeed { display: none; }
+
+/* Matçlar: panel, hesab lövhəsi, düymə */
+.mpanel { width: 340px; overflow-y: auto; }
+.mp-card { background: #ffffff10; border-radius: 12px; padding: 10px; margin: 8px 0; }
+.mp-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; }
+.mp-state { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #ffffff22; white-space: nowrap; }
+.mp-state.play, .mp-state.count { background: #2a9d8f; }
+.mp-state.wait { background: #e9c46a; color: #1b2838; }
+.mp-sub { font-size: 11px; opacity: .65; margin: 2px 0 8px; }
+.mp-modes { display: flex; gap: 6px; margin-bottom: 8px; }
+.mp-mode { flex: 1; padding: 5px; background: #ffffff18; font-size: 13px; }
+.mp-mode.on { background: #ffd166; color: #1b2838; }
+.mp-teams { display: flex; gap: 8px; }
+.mp-team { flex: 1; border-top: 3px solid; background: #0003; border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mp-tname { font-weight: 700; font-size: 12px; }
+.mp-slot { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-slot.empty { opacity: .45; }
+.mp-join { padding: 5px; font-size: 12px; margin-top: 2px; color: #fff; }
+.mp-leave { width: 100%; margin-top: 8px; padding: 6px; font-size: 12px; }
+.mhud { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; background: #000b;
+  padding: 6px 12px; border-radius: 14px; color: #fff; font-size: 13px; pointer-events: none; white-space: nowrap; z-index: 6; }
+.mh-title { opacity: .8; }
+.mh-team { padding: 2px 8px; border-radius: 8px; font-weight: 700; font-size: 12px; }
+.mh-score { font-size: 20px; min-width: 64px; text-align: center; }
+.mh-time { font-variant-numeric: tabular-nums; opacity: .9; }
+.mchip { pointer-events: auto; position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: #2a9d8fdd; color: #fff;
+  padding: 8px 16px; border-radius: 20px; font-size: 15px; font-weight: 700; }
+.mchip small { opacity: .75; font-weight: 400; }
+body.touch .mhud { top: 54px; font-size: 11px; gap: 5px; padding: 4px 8px; }
+body.touch .mh-score { font-size: 16px; min-width: 44px; }
+body.touch .mh-title { display: none; }
+body.touch .mchip { bottom: auto; top: 100px; font-size: 13px; padding: 6px 12px; }
+body.touch .mchip small { display: none; }
+body.photo .mhud, body.photo .mchip { display: none !important; }
