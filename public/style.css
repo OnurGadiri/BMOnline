@@ -383,3 +383,26 @@ body.touch .ex-q { font-size: 14px; margin: 2px 0 6px; }
 body.touch .ex-opt { padding: 6px 8px; font-size: 13px; }
 body.touch .ex-tip { display: none; }
 body:not(.touch) .exam { left: auto; right: 16px; transform: none; width: min(420px, 94vw); }
+
+/* Çoxoyunçulu imtahan: lobbi, gözləmə, ipucları, nəticələr */
+.xlobby { width: 340px; z-index: 21; }
+.xl-card { background: #ffffff10; border-radius: 10px; padding: 8px 10px; margin: 6px 0; }
+.xl-head { display: flex; justify-content: space-between; align-items: center; }
+.xl-st { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #e9c46a; color: #1b2838; }
+.xl-st.count { background: #2a9d8f; color: #fff; }
+.xl-st.exam { background: #e63946; color: #fff; }
+.xl-names { font-size: 12px; opacity: .8; margin: 4px 0; }
+.xl-join { width: 100%; padding: 6px; font-size: 13px; }
+.xl-empty { font-size: 13px; opacity: .7; padding: 8px 0; }
+.xl-acts { display: flex; gap: 6px; margin-top: 8px; }
+.xl-acts button { flex: 1; }
+.xwait { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); background: #1b2838e6; color: #fff; padding: 7px 14px;
+  border-radius: 12px; font-size: 14px; z-index: 6; pointer-events: none; border: 1px solid #ffd16688; }
+.ex-hints { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.ex-hint { font-size: 12px; background: #fff3cd; color: #6b4e00; padding: 3px 8px; border-radius: 6px; font-family: Consolas, monospace; }
+.ex-opt.dis { opacity: .55; }
+.ex-eye.mid { background: #e8f0fb; color: #2a4d9b; }
+.ex-ps { font-size: 11px; margin-top: 6px; opacity: .75; text-align: center; white-space: pre-wrap; }
+.xres { display: block; z-index: 22; }
+.xres[hidden] { display: none; }
+body.touch .xwait { top: 96px; font-size: 12px; }

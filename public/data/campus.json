@@ -90,9 +90,10 @@
   "rooms": [
     {
       "id": "kapital", "title": "Kapital Bank Room", "teacher": "Müəllim", "x": 0, "z": -360, "w": 12, "d": 18, "h": 3.3,
-      "door": { "x": -18.7, "z": 27, "ry": 1.5708, "out": [-17.2, 27], "label": "Yeni bina — Kapital Bank Room" },
+      "instances": 3, "gap": -40,
+      "door": { "x": 57.2, "z": -140, "ry": -1.5708, "out": [55.5, -140], "sign": [56.2, -144.3], "label": "Rektorluq — Kapital Bank Room" },
       "exit": { "x": -4, "z": -351 },
-      "spawn": [-4, -352.3]
+      "exam": { "min": 3, "max": 8, "time": 180, "questions": 5, "npcs": 9, "countdown": 10 }
     }
   ],
   "matches": [

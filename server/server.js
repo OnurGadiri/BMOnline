@@ -83,7 +83,14 @@ function validPos(x, z) {
   return !CAMPUS.buildings.some((bd) => Math.abs(x - bd.x) < bd.w / 2 + 0.5 && Math.abs(z - bd.z) < bd.d / 2 + 0.5);
 }
 // ---------- Otaqlar (ayrıca qapalı məkanlar, məs. Kapital Bank Room) ----------
-const ROOMS = (CAMPUS.rooms || []).map((r) => ({ ...r, rect: { minX: r.x - r.w / 2, maxX: r.x + r.w / 2, minZ: r.z - r.d / 2, maxZ: r.z + r.d / 2 } }));
+// hər otağın bir neçə nüsxəsi (instance) var — eyni vaxtda bir neçə imtahan keçirilə bilsin
+const ROOMS = [];
+for (const r of CAMPUS.rooms || []) {
+  for (let k = 0; k < (r.instances || 1); k++) {
+    const z = r.z + (r.gap || 0) * k;
+    ROOMS.push({ ...r, inst: k, z, rect: { minX: r.x - r.w / 2, maxX: r.x + r.w / 2, minZ: z - r.d / 2, maxZ: z + r.d / 2 } });
+  }
+}
 const roomAt = (x, z, m = 1) => ROOMS.find((r) => x > r.rect.minX - m && x < r.rect.maxX + m && z > r.rect.minZ - m && z < r.rect.maxZ + m) || null;
 function clearLine(x1, z1, x2, z2) {
   return !CAMPUS.buildings.some((b) => segHitsBox(x1, z1, x2, z2, b));
@@ -561,6 +568,348 @@ setInterval(() => {
   if (changed) pushMatches();
 }, 250);
 
+// ---------- C# imtahanı: çoxoyunçulu kopya missiyası (Kapital Bank Room) ----------
+// Rektorluğun orta qapısında lobbiyə qoşulursan; ən az 3 nəfər olanda geri sayım, sonra hamı sinfə köçürülür.
+// Müəllim (server simulyasiyası) lövhəyə yazır, çevrilir, sinfə baxır və aralıqlarda gəzir.
+// Oyunçu ayağa qalxıb NPC-lərin və digər oyunçuların kağızına baxa, ya da yerində telefona baxa bilər.
+// Müəllim oyunçunu yerindən kənarda və ya kopya çəkərkən görsə — şübhə artır, 100-də imtahandan xaric olunur.
+const EXAM_ROOM = (CAMPUS.rooms || [])[0] || null;
+const EXAM_CFG = { min: 3, max: 8, time: 180, questions: 5, npcs: 9, countdown: 10, ...(EXAM_ROOM?.exam || {}) };
+const QUESTIONS = [
+  ['C#-da tam ədəd tipi hansıdır?', ['int', 'string', 'bool'], 0],
+  ['Konsola sətir yazmaq üçün:', ['print()', 'Console.WriteLine()', 'echo'], 1],
+  ['Sinifdən obyekt yaratmaq üçün açar söz:', ['create', 'make', 'new'], 2],
+  ['List<int> siyahısındakı elementlərin sayı:', ['.Count', '.Length', '.Size'], 0],
+  ['Massivin uzunluğu:', ['.Size', '.Length', '.Total'], 1],
+  ['Varislik (inheritance) hansı simvolla yazılır?', ['->', 'extends', ':'], 2],
+  ['Dəyəri heç vaxt dəyişməyən sabit:', ['const', 'var', 'dynamic'], 0],
+  ['Sətir interpolyasiyası:', ['"Salam {ad}"', '$"Salam {ad}"', '@"Salam {ad}"'], 1],
+  ['İstisnanı (exception) tutmaq üçün:', ['if / else', 'switch', 'try / catch'], 2],
+  ['Heç nə qaytarmayan metodun tipi:', ['void', 'null', 'empty'], 0],
+  ['İnterfeys elan etmək üçün açar söz:', ['struct', 'interface', 'abstract'], 1],
+  ['LINQ-da filtrləmə metodu:', ['Select', 'OrderBy', 'Where'], 2],
+  ['async metodda nəticəni gözləmək üçün:', ['await', 'wait', 'yield'], 0],
+  ['null ola bilən int:', ['int!', 'int?', 'int*'], 1],
+  ['Bütün tiplərin baza sinfi:', ['base', 'root', 'object'], 2],
+  ['"==" operatoru nə edir?', ['müqayisə', 'mənimsətmə', 'artırma'], 0],
+  ['for (int i = 0; i < 3; i++) neçə dəfə işləyir?', ['2', '3', '4'], 1],
+  ['Sinfin üzvünü yalnız daxildən əlçatan edən:', ['public', 'internal', 'private'], 2],
+];
+// NPC sinif yoldaşları (uydurma): skill — düzgün cavab ehtimalı, sneaky — özü də kopya çəkməyə meyli
+const NPC_STUDENTS = [
+  ['Əlaçı Leyla', 0.95, 0], ['Nərd Nihad', 0.9, 0.05], ['Səliqəli Səbinə', 0.85, 0], ['Sakit Sevinc', 0.75, 0.05],
+  ['Orta Orxan', 0.6, 0.15], ['Şən Şahin', 0.5, 0.25], ['Futbolçu Fərid', 0.45, 0.3], ['Kopyaçı Kamran', 0.35, 0.6],
+  ['Yuxulu Yusif', 0.3, 0.1], ['Tənbəl Tural', 0.25, 0.35], ['Gecikən Gülnar', 0.55, 0.2], ['Riyaziyyatçı Rəşad', 0.8, 0.05],
+];
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/** Otaq nüsxəsinin (instance) həndəsəsi — klientdəki classroom.js ilə eyni düsturlar */
+function roomLayout(inst) {
+  const r = EXAM_ROOM, cx = r.x, cz = r.z + (r.gap || 0) * inst, W = r.w, D = r.d;
+  const z0 = cz - D / 2, z1 = cz + D / 2;
+  const cols = [-W / 2 + 2.25, 0, W / 2 - 2.25];
+  const rowZ = Array.from({ length: 7 }, (_, i) => z0 + 4.4 + i * 1.55);
+  const seats = [];
+  for (const dz of rowZ) for (const c of cols) for (const s of [-0.62, 0.62]) seats.push({ x: cx + c + s, z: dz + 0.6 });
+  const aisle = [cx + (cols[0] + cols[1]) / 2, cx + (cols[1] + cols[2]) / 2];
+  return { cx, cz, z0, z1, seats, aisle, board: { x: cx + 1.2, z: z0 + 1.3 }, zf: z0 + 3.2, zb: z0 + 15.6, exit: { x: r.exit.x, z: r.exit.z + (r.gap || 0) * inst } };
+}
+
+const examSessions = new Map(); // id -> session
+let examSeq = 0;
+const examOf = (key) => [...examSessions.values()].find((S) => S.members.has(key)) || null;
+function freeInstance() {
+  const used = new Set([...examSessions.values()].map((S) => S.inst));
+  for (let k = 0; k < (EXAM_ROOM?.instances || 1); k++) if (!used.has(k)) return k;
+  return -1;
+}
+function examList() {
+  return {
+    t: 'xlist',
+    s: [...examSessions.values()].map((S) => ({
+      id: S.id, state: S.state, n: [...S.members.values()].filter((p) => p.st !== 'out').length, min: EXAM_CFG.min, max: EXAM_CFG.max,
+      names: [...S.members.values()].map((p) => nameOf(p.key)), host: nameOf(S.host),
+      start: S.state === 'count' ? Math.max(0, (S.startAt - Date.now()) / 1000) : 0,
+      left: S.state === 'exam' ? Math.max(0, (S.endsAt - Date.now()) / 1000) : 0,
+    })),
+  };
+}
+const pushExamList = () => broadcast(examList());
+const sendS = (S, msg) => { for (const k of S.members.keys()) { const ws = sockets.get(k); if (ws) send(ws, msg); } };
+function tpTo(key, x, z) {
+  const e = entities.get(key);
+  if (!e) return;
+  e.x = x; e.z = z; e.y = 0; e.emote = 0; e.w = 0;
+  const ws = sockets.get(key);
+  if (ws) { ws.lastPosAt = Date.now(); send(ws, { t: 'correct', x, y: 0, z }); }
+}
+const doorOut = () => ({ x: EXAM_ROOM.door.out[0] + (Math.random() - 0.5) * 2, z: EXAM_ROOM.door.out[1] + (Math.random() - 0.5) * 3 });
+
+function examCreate(ws) {
+  if (!EXAM_ROOM) return;
+  const cur = examOf(ws.key);
+  if (cur && cur.members.get(ws.key).st !== 'out') return send(ws, { t: 'sys', msg: 'Sən artıq bir imtahan otağındasan.' });
+  const inst = freeInstance();
+  if (inst < 0) return send(ws, { t: 'sys', msg: '⏳ Bütün sinif otaqları məşğuldur — bir az sonra yoxla.' });
+  if (cur) cur.members.delete(ws.key);
+  const S = { id: ++examSeq, inst, host: ws.key, state: 'lobby', members: new Map(), startAt: 0, endsAt: 0 };
+  examSessions.set(S.id, S);
+  S.members.set(ws.key, { key: ws.key, st: 'lobby' });
+  broadcast({ t: 'sys', msg: `📝 ${nameOf(ws.key)} Rektorluqda yeni C# imtahan otağı açdı — qoşulmaq üçün orta qapıya gəl! (min ${EXAM_CFG.min} nəfər)` });
+  examCheckCount(S);
+  pushExamList();
+}
+function examJoin(ws, id) {
+  const e = entities.get(ws.key);
+  if (!e || e.dead) return;
+  const cur = examOf(ws.key);
+  if (cur && cur.members.get(ws.key).st !== 'out') return;
+  let S = id ? examSessions.get(Number(id)) : [...examSessions.values()].find((x) => x.state === 'lobby' || x.state === 'count');
+  if (!S) return examCreate(ws);
+  if (S.state !== 'lobby' && S.state !== 'count') return send(ws, { t: 'sys', msg: 'Bu imtahan artıq başlayıb — yeni otaq aç və ya gözlə.' });
+  if (S.members.size >= EXAM_CFG.max) return send(ws, { t: 'sys', msg: 'Otaq doludur.' });
+  if (cur) cur.members.delete(ws.key);
+  S.members.set(ws.key, { key: ws.key, st: 'lobby' });
+  examCheckCount(S);
+  pushExamList();
+}
+function examCheckCount(S) {
+  const n = S.members.size;
+  if (S.state === 'lobby' && n >= EXAM_CFG.min) { S.state = 'count'; S.startAt = Date.now() + EXAM_CFG.countdown * 1000; }
+  else if (S.state === 'count' && n < EXAM_CFG.min) S.state = 'lobby';
+}
+/** Oyunçu otaqdan/lobbidən çıxır (və ya oyundan gedir) */
+function examLeave(key, why = 'left') {
+  const S = examOf(key);
+  if (!S) return;
+  const p = S.members.get(key);
+  if (S.state === 'lobby' || S.state === 'count') {
+    S.members.delete(key);
+    if (!S.members.size) examSessions.delete(S.id);
+    else { if (S.host === key) S.host = S.members.keys().next().value; examCheckCount(S); }
+  } else if (S.state === 'exam' && p.st === 'in') {
+    examOut(S, p, why);
+  } else S.members.delete(key);
+  pushExamList();
+}
+function examStart(S) {
+  const L = roomLayout(S.inst);
+  S.L = L;
+  S.state = 'exam';
+  S.endsAt = Date.now() + EXAM_CFG.time * 1000;
+  S.qs = shuffle([...QUESTIONS]).slice(0, EXAM_CFG.questions).map(([q, o, c]) => {
+    const idx = shuffle([0, 1, 2]);
+    return { q, o: idx.map((i) => o[i]), c: idx.indexOf(c) };
+  });
+  // yerlər: oyunçular 2–5-ci sıralarda, NPC-lər qalan yerlərdə
+  const all = L.seats.map((s, i) => i);
+  const mid = shuffle(all.filter((i) => i >= 6 && i < 30));
+  const used = new Set();
+  for (const p of S.members.values()) {
+    const seat = mid.find((i) => !used.has(i));
+    used.add(seat);
+    Object.assign(p, { st: 'in', seat, i: 0, ans: [], sus: 0, peek: false, prog: 0, tgt: null, seen: false });
+  }
+  const free = shuffle(all.filter((i) => !used.has(i)));
+  S.npcs = shuffle([...NPC_STUDENTS]).slice(0, EXAM_CFG.npcs).map(([name, skill, sneaky], k) => ({
+    name, skill, sneaky, seat: free[k], gone: false, cheat: 0, look: Math.floor(Math.random() * 1e6),
+    ans: S.qs.map((q) => (Math.random() < skill ? q.c : (q.c + 1 + Math.floor(Math.random() * 2)) % 3)),
+  }));
+  S.tch = { x: L.board.x, z: L.board.z, ry: Math.PI, st: 'board', t: 4, path: [], base: 0 };
+  for (const p of S.members.values()) {
+    const s = L.seats[p.seat];
+    tpTo(p.key, s.x, s.z);
+    const ws = sockets.get(p.key);
+    if (ws) send(ws, { t: 'xstart', id: S.id, inst: S.inst, seat: p.seat, qs: S.qs.map(({ q, o }) => ({ q, o })), time: EXAM_CFG.time,
+      npcs: S.npcs.map((n) => ({ name: n.name, seat: n.seat, look: n.look })) });
+  }
+  broadcast({ t: 'sys', msg: `📝 C# imtahanı başladı: ${[...S.members.keys()].map(nameOf).join(', ')}. Uğurlar (və diqqətli olun 👀)!` });
+}
+function examOut(S, p, why) {
+  p.st = 'out';
+  p.peek = false;
+  const o = doorOut();
+  tpTo(p.key, o.x, o.z);
+  const ws = sockets.get(p.key);
+  if (ws) send(ws, { t: 'xout', why });
+  const nm = nameOf(p.key);
+  if (why === 'caught') {
+    sendS(S, { t: 'xsay', text: `${nm}! Kopya? Kağızını ver, çıx!` });
+    broadcast({ t: 'sys', msg: `🚨 ${nm} C# imtahanında kopya çəkərkən tutuldu və imtahandan xaric edildi!` });
+  } else sendS(S, { t: 'xsay', text: `${nm} imtahanı tərk etdi.` });
+  examMaybeEnd(S);
+}
+function examMaybeEnd(S) {
+  if (S.state !== 'exam') return;
+  const act = [...S.members.values()].filter((p) => p.st === 'in');
+  if (!act.length || act.every((p) => p.i >= S.qs.length) || Date.now() >= S.endsAt) examEnd(S);
+}
+function examEnd(S) {
+  S.state = 'done';
+  const res = [...S.members.values()].map((p) => ({
+    key: p.key, name: nameOf(p.key), out: p.st !== 'in', score: p.st === 'in' ? (p.ans || []).filter((a, i) => a === S.qs[i].c).length : 0,
+  })).sort((a, b) => b.score - a.score || a.out - b.out);
+  const best = res.find((r) => !r.out)?.score || 0;
+  for (const r of res) {
+    if (r.out) continue;
+    let xp = r.score * 8 + (r.score === S.qs.length ? 10 : 0) + (best > 0 && r.score === best ? 15 : 0);
+    if (xp) addXp(r.key, xp);
+    r.xp = xp;
+    const acc = db.accounts[r.key];
+    if (acc) acc.exams = (acc.exams || 0) + 1;
+  }
+  sendS(S, { t: 'xend', res: res.map(({ key, ...r }) => r), n: S.qs.length });
+  broadcast({ t: 'sys', msg: `📝 İmtahan bitdi: ${res.map((r, i) => `${i + 1}) ${r.name} ${r.out ? '🚨' : `${r.score}/${S.qs.length}`}`).join(' · ')}` });
+  setTimeout(() => {
+    for (const p of S.members.values()) {
+      const e = entities.get(p.key);
+      if (p.st === 'in' && e && roomAt(e.x, e.z)) { const o = doorOut(); tpTo(p.key, o.x, o.z); }
+    }
+    examSessions.delete(S.id);
+    pushExamList();
+  }, 6000);
+  scheduleSave();
+  pushExamList();
+}
+
+// müəllimin yeriməsi: hədəfə çatdısa true
+function tchMove(T, x, z, dt) {
+  const dx = x - T.x, dz = z - T.z, d = Math.hypot(dx, dz);
+  if (d < 0.1) return true;
+  const s = Math.min(d, 1.25 * dt);
+  T.x += (dx / d) * s; T.z += (dz / d) * s;
+  T.ry = Math.atan2(dx, dz);
+  return false;
+}
+function teacherStep(S, dt) {
+  const T = S.tch, L = S.L;
+  T.t -= dt;
+  T.moving = false;
+  if (T.st === 'walk') {
+    T.moving = true;
+    if (tchMove(T, T.path[0].x, T.path[0].z, dt)) {
+      T.path.shift();
+      if (!T.path.length) Object.assign(T, { st: 'board', t: 3 + Math.random() * 3 });
+      else if (Math.random() < 0.4) Object.assign(T, { st: 'look', t: 1.2 + Math.random() * 1.5, base: T.ry });
+    }
+  } else if (T.st === 'look') {
+    T.ry = T.base + Math.sin(Date.now() / 450) * 0.8; // dayanıb ətrafa baxır
+    if (T.t <= 0) T.st = T.path.length ? 'walk' : 'board';
+  } else if (T.st === 'board') {
+    if (!tchMove(T, L.board.x, L.board.z, dt)) { T.moving = true; return; }
+    T.ry = Math.PI; // lövhəyə üzü, sinfə arxası
+    if (T.t <= 0) Object.assign(T, { st: 'turn', t: 0.7 });
+  } else if (T.st === 'turn') {
+    T.ry = Math.PI / 2;
+    if (T.t <= 0) Object.assign(T, { st: 'watch', t: 1.8 + Math.random() * 2.2, base: 0 });
+  } else if (T.st === 'watch') {
+    T.ry = Math.sin(Date.now() / 700) * 0.55;
+    if (T.t <= 0) {
+      if (Math.random() < 0.7) {
+        // sinifdə gəzinti: bir aralıqla aşağı, arxadan keçib o biri aralıqla yuxarı (və ya eyni aralıqla qayıt)
+        const a = Math.random() < 0.5 ? 0 : 1, b = 1 - a;
+        const deep = Math.random() < 0.6;
+        T.path = deep
+          ? [{ x: L.aisle[a], z: L.zf }, { x: L.aisle[a], z: L.zb }, { x: L.aisle[b], z: L.zb }, { x: L.aisle[b], z: L.zf }, L.board]
+          : [{ x: L.aisle[a], z: L.zf }, { x: L.aisle[a], z: L.zf + 4 + Math.random() * 7 }, { x: L.aisle[a], z: L.zf }, L.board];
+        T.st = 'walk';
+      } else Object.assign(T, { st: 'board', t: 3 + Math.random() * 3 });
+    }
+  }
+}
+function teacherSees(T, x, z) {
+  const dx = x - T.x, dz = z - T.z, d = Math.hypot(dx, dz);
+  if (d > 10) return 0;
+  if (d < 1.2) return 2; // lap yanındadır
+  const cos = (dx * Math.sin(T.ry) + dz * Math.cos(T.ry)) / d;
+  return cos > 0.5 ? (d < 3 ? 2 : 1) : 0; // ~60° görmə bucağı
+}
+
+setInterval(() => {
+  const now = Date.now(), dt = 0.1;
+  let listChanged = false;
+  for (const S of examSessions.values()) {
+    if (S.state === 'count' && now >= S.startAt) { examStart(S); listChanged = true; continue; }
+    if (S.state !== 'exam') continue;
+    teacherStep(S, dt);
+    const T = S.tch;
+    // NPC-lər arabir özləri də kopya çəkir — müəllim görsə onları da çıxarır
+    for (const n of S.npcs) {
+      if (n.gone) continue;
+      const s = S.L.seats[n.seat];
+      if (n.cheat > 0) {
+        n.cheat -= dt;
+        if (teacherSees(T, s.x, s.z) && Math.random() < 0.06) {
+          n.gone = true;
+          sendS(S, { t: 'xsay', text: `${n.name}! Telefonu ver, çıx!` });
+        }
+      } else if (Math.random() < n.sneaky * 0.012) n.cheat = 1.5 + Math.random() * 2;
+    }
+    for (const p of S.members.values()) {
+      if (p.st !== 'in') continue;
+      const e = entities.get(p.key);
+      if (!e) continue;
+      const seat = S.L.seats[p.seat];
+      const seated = Math.hypot(e.x - seat.x, e.z - seat.z) < 0.7;
+      // kopya mənbəyi: öz yerində — telefon; ayaq üstə — yaxındakı NPC/oyunçunun kağızı
+      let tgt = null, rate = 0;
+      if (p.peek) {
+        if (seated) { tgt = 'phone'; rate = 1 / 4.5; }
+        else {
+          let bd = 1.25;
+          for (const n of S.npcs) {
+            if (n.gone) continue;
+            const s = S.L.seats[n.seat], d = Math.hypot(e.x - s.x, e.z - s.z);
+            if (d < bd) { bd = d; tgt = 'n' + n.seat; }
+          }
+          for (const q of S.members.values()) {
+            if (q === p || q.st !== 'in') continue;
+            const s = S.L.seats[q.seat], d = Math.hypot(e.x - s.x, e.z - s.z);
+            if (d < bd) { bd = d; tgt = 'p' + q.key; }
+          }
+          rate = tgt ? 1 / 1.6 : 0;
+        }
+      }
+      if (tgt !== p.tgt) { p.tgt = tgt; p.prog = 0; }
+      if (tgt && p.i < S.qs.length) {
+        p.prog += rate * dt;
+        if (p.prog >= 1) {
+          p.prog = 0;
+          let a = -1, src = '';
+          if (tgt === 'phone') { a = S.qs[p.i].c; src = '📱 Şpargalka'; }
+          else if (tgt[0] === 'n') { const n = S.npcs.find((x) => 'n' + x.seat === tgt); a = n.ans[p.i]; src = n.name; }
+          else { const q = S.members.get(tgt.slice(1)); a = q?.ans?.[p.i] ?? -1; src = nameOf(tgt.slice(1)); }
+          const ws = sockets.get(p.key);
+          if (ws) send(ws, { t: 'xreveal', i: p.i, a, src });
+        }
+      }
+      // müəllim görürmü?
+      const sus = p.peek || !seated;
+      const seen = teacherSees(T, e.x, e.z);
+      p.seen = !!seen && sus;
+      if (seen && sus) p.sus += (p.peek ? 55 : 22) * seen * dt;
+      else if (!sus) p.sus = Math.max(0, p.sus - 8 * dt);
+      if (p.sus >= 100) { p.sus = 100; examOut(S, p, 'caught'); listChanged = true; }
+    }
+    if (S.state === 'exam') {
+      examMaybeEnd(S);
+      if (S.state !== 'exam') { listChanged = true; continue; }
+      const ps = [...S.members.values()].map((q) => [nameOf(q.key), q.i || 0, q.st]);
+      const npcBits = S.npcs.map((n) => (n.gone ? 2 : n.cheat > 0 ? 1 : 0));
+      for (const p of S.members.values()) {
+        const ws = sockets.get(p.key);
+        if (!ws) continue;
+        send(ws, { t: 'xs', id: S.id, tch: [+T.x.toFixed(2), +T.z.toFixed(2), +T.ry.toFixed(2), T.st, T.moving ? 1 : 0],
+          left: Math.max(0, (S.endsAt - now) / 1000), st: p.st, sus: Math.round(p.sus), seen: p.seen ? 1 : 0,
+          prog: +p.prog.toFixed(2), tgt: p.tgt, i: p.i || 0, ps, npc: npcBits });
+      }
+    }
+  }
+  if (listChanged) pushExamList();
+}, 100);
+// lobbi geri sayımı üçün siyahını arabir yenilə
+setInterval(() => { if ([...examSessions.values()].some((S) => S.state === 'count' || S.state === 'exam')) pushExamList(); }, 2000);
+
 // ---------- Ulduzlar (toplanan bonuslar) ----------
 const stars = new Map();
 let starSeq = 0;
@@ -587,6 +936,7 @@ function goOffline(key) {
   if (!e || !e.online) return;
   e.online = false;
   e.w = 0;
+  examLeave(key, 'left');
   const rmOff = roomAt(e.x, e.z);
   if (rmOff) { e.x = rmOff.door.out[0]; e.z = rmOff.door.out[1]; }
   leaveMatch(key, 'oyundan çıxdı');
@@ -719,6 +1069,7 @@ wss.on('connection', (ws, req) => {
       send(ws, gallowsState());
       send(ws, ballState());
       send(ws, matchState());
+      send(ws, examList());
       send(ws, { t: 'stars', s: [...stars.values()] });
       send(ws, { t: 'ammo', ammo: ws.ammo });
       if (e.dead) send(ws, { t: 'dead', id: e.key, by: '', weapon: '', respawn: Math.max(0, e.respawnAt - Date.now()) });
@@ -803,43 +1154,34 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
-    if (m.t === 'room' && ws.inGame) {
+    // C# imtahanı (kopya missiyası)
+    if (m.t === 'xjoin' && ws.inGame) {
       const e = entities.get(ws.key);
-      const r = ROOMS.find((x) => x.id === m.id);
-      if (!e || e.dead || !r) return;
-      let to = null;
-      if (m.act === 'enter' && Math.hypot(e.x - r.door.x, e.z - r.door.z) < 4) to = r.spawn;
-      else if (m.act === 'leave' && roomAt(e.x, e.z) === r && Math.hypot(e.x - r.exit.x, e.z - r.exit.z) < 3) to = r.door.out;
-      if (!to) return;
-      leaveMatch(ws.key, 'meydançanı tərk etdi');
-      e.x = to[0]; e.z = to[1]; e.y = 0; e.emote = 0;
-      ws.lastPosAt = Date.now();
-      ws.examStart = 0;
-      return send(ws, { t: 'correct', x: e.x, y: 0, z: e.z });
+      if (!e || !EXAM_ROOM || Math.hypot(e.x - EXAM_ROOM.door.x, e.z - EXAM_ROOM.door.z) > 5) return;
+      return m.new ? examCreate(ws) : examJoin(ws, m.id);
     }
-
-    // C# imtahanı (kopya missiyası): server yalnız vaxtı və yeri yoxlayıb XP verir
-    if (m.t === 'exam' && ws.inGame) {
+    if (m.t === 'xleave' && ws.inGame) {
+      const S = examOf(ws.key), inside = S?.state === 'exam' && S.members.get(ws.key).st === 'in';
+      examLeave(ws.key, 'left');
       const e = entities.get(ws.key);
-      if (!e || !roomAt(e.x, e.z)) return;
-      const now = Date.now();
-      if (m.act === 'start') { ws.examStart = now; return; }
-      if (m.act !== 'done' || !ws.examStart) return;
-      const took = now - ws.examStart;
-      ws.examStart = 0;
-      if (took < 20_000) return; // çox tez — saxta nəticə
-      const acc = db.accounts[ws.key];
-      const correct = Math.max(0, Math.min(5, Math.floor(Number(m.correct) || 0)));
-      const caught = !!m.caught, cheated = !!m.cheated;
-      const cool = now - (acc.lastExam || 0) < 180_000; // 3 dəqiqədə bir XP
-
-      let xp = 0;
-      if (!caught && !cool) xp = correct * 8 + (correct === 5 ? 10 : 0) + (!cheated && correct >= 3 ? 15 : 0);
-      if (xp) { addXp(ws.key, xp); acc.lastExam = now; }
-      acc.exams = (acc.exams || 0) + 1;
-      broadcast({ t: 'sys', msg: caught ? `🚨 ${acc.name} C# imtahanında kopya çəkərkən tutuldu!`
-        : `📝 ${acc.name} C# imtahanından ${correct}/5 aldı${cheated ? ' (kopya ilə 😏)' : ' — dürüst! 👏'}` });
-      return send(ws, { t: 'examResult', xp, cool });
+      if (!inside && e && roomAt(e.x, e.z)) { const o = doorOut(); tpTo(ws.key, o.x, o.z); }
+      return;
+    }
+    if (m.t === 'xpeek' && ws.inGame) {
+      const S = examOf(ws.key), pp = S?.members.get(ws.key);
+      if (S?.state === 'exam' && pp.st === 'in') pp.peek = !!m.on;
+      return;
+    }
+    if (m.t === 'xans' && ws.inGame) {
+      const S = examOf(ws.key), pp = S?.members.get(ws.key), e = entities.get(ws.key);
+      if (S?.state !== 'exam' || pp.st !== 'in' || pp.i >= S.qs.length || !e) return;
+      const seat = S.L.seats[pp.seat];
+      if (Math.hypot(e.x - seat.x, e.z - seat.z) > 0.8) return send(ws, { t: 'sys', msg: 'Cavab yazmaq üçün öz yerinə otur.' });
+      const ans = Math.floor(Number(m.a));
+      if (!(ans >= 0 && ans <= 2)) return;
+      pp.ans[pp.i++] = ans;
+      examMaybeEnd(S);
+      return;
     }
 
     if (m.t === 'match' && ws.inGame) {

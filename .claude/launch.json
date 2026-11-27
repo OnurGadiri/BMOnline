@@ -6,6 +6,13 @@
       "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
       "runtimeArgs": ["server/server.js"],
       "port": 3000
+    },
+    {
+      "name": "bmu-test",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["server/server.js"],
+      "env": { "PORT": "3002", "BMU_DATA_DIR": "C:\\Users\\onurg\\AppData\\Local\\Temp\\bmu-browser-test" },
+      "port": 3002
     }
   ]
 }

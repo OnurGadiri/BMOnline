@@ -85,12 +85,16 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   a kick and release to shoot in the direction you are looking. Goals are announced to everyone (+15 XP).
 - **Basketball:** hold **F** next to the ball on the volleyball court and release in the middle of the
   power bar to shoot at the hoop on the wall (+10 XP per basket).
-- **Kapital Bank Room & C# exam mission:** a door on the east side of the new building (Yeni bina) leads
-  into the Kapital Bank Room classroom (red graduation-cap wall, orange/yellow window wall, desks, screen).
-  Talk to the (fictional) teacher to start the "Modern programming (C#)" exam: you sit at a desk and answer
-  5 C# questions. Hold **F** to peek at your cheat sheet — it reveals the right answer, but if the teacher
-  sees you while she is watching the class or walking the aisle, suspicion rises and you get caught.
-  Answer with **1-3**. XP for correct answers, a bonus for 5/5 and for passing honestly.
+- **Kapital Bank Room — C# exam cheating mission (multiplayer):** press **F** at the middle door of the
+  rectorate to open the exam lobby, join a room or open a new one. With at least **3 students** the exam
+  starts automatically after a 10-second countdown and everyone is seated in the Kapital Bank Room classroom
+  (red graduation-cap wall, orange/yellow window wall, desks, screen) next to fictional NPC classmates.
+  The (fictional) teacher writes on the board, turns around, watches the class and walks the aisles.
+  Hold **F** at your desk to peek at your phone, or stand up, walk next to a classmate (NPC or player) and
+  hold **F** to copy from their paper — fast, but they may be wrong. Answers (**1-3**) can only be written
+  at your own desk. If the teacher sees you out of your seat or cheating, suspicion rises; when it is full
+  you are thrown out of the exam and wait for the others to finish — or open a new room with new players.
+  Up to 3 exams can run at the same time; results and XP are announced when everyone has finished.
 - **Volleyball:** a ball with a real net on the volleyball court. Press **F** to hit it over the net
   (hold **F** to charge a serve).
 - **Matches (1v1 / 2v2):** inside the football pitch or the volleyball/basketball court, press **F**

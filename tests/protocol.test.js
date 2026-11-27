@@ -279,6 +279,49 @@ async function enter(name, pin = '1234') {
   const en = await ended;
   ok('rəqib çıxanda matç bitir (texniki qələbə)', en?.win === 'A');
 
+  // --- 8c. C# imtahanı (kopya missiyası): lobbi, 3 nəfər, başlanğıc, cavablar, kopya, çıxış ---
+  {
+    const door = { x: 56.6, z: -140 };
+    const G = await enter('Gamma');
+    const far = G.c.waitT('xlist', 800, (m) => m.s.length > 0);
+    G.c.send({ t: 'xjoin', new: true });
+    ok('imtahan otağını yalnız Rektorluğun qapısında açmaq olar', !(await far));
+    // serverin bildiyi əsl mövqedən başla (ölüm/yenidən doğulma/düzəlişlərdən sonra)
+    const realPos = (P, key) => { const sn = [...P.c.msgs].reverse().find((m) => m.t === 'snap'); const r = sn?.e.find((x) => x[0] === key); return r ? { x: r[1], z: r[3] } : P.c.pos; };
+    await Promise.all([[A, 'alfa'], [B, 'beta'], [G, 'gamma']].map(async ([P, k]) => { P.c.pos = await P.c.walkTo(realPos(P, k), door, 8.5); }));
+    await sleep(200);
+    const l1 = A.c.waitT('xlist', 2000, (m) => m.s.some((s) => s.state === 'lobby' && s.n === 1));
+    A.c.send({ t: 'xjoin', new: true });
+    ok('qapıda yeni imtahan otağı (lobbi) açılır', !!(await l1));
+    const l2 = A.c.waitT('xlist', 2000, (m) => m.s.some((s) => s.n === 2 && s.state === 'lobby'));
+    B.c.send({ t: 'xjoin' });
+    ok('2 nəfərlə imtahan başlamır (min 3)', !!(await l2));
+    const cnt = A.c.waitT('xlist', 2000, (m) => m.s.some((s) => s.state === 'count' && s.n === 3));
+    G.c.send({ t: 'xjoin' });
+    ok('3-cü tələbə qoşulanda geri sayım başlayır', !!(await cnt));
+    const [sa, sb, sg] = await Promise.all([A, B, G].map((P) => P.c.waitT('xstart', 13000)));
+    ok('imtahan avtomatik başlayır (hamıya suallar gəlir)', !!(sa && sb && sg) && sa.qs.length === 5 && sa.npcs.length > 0, sa ? `${sa.qs.length} sual, ${sa.npcs.length} NPC` : '');
+    ok('hər tələbəyə ayrı yer verilir', !!sa && new Set([sa.seat, sb?.seat, sg?.seat]).size === 3);
+    // telefona bax (öz yerində)
+    const rev = A.c.waitT('xreveal', 6500);
+    A.c.send({ t: 'xpeek', on: true });
+    const rv = await rev;
+    A.c.send({ t: 'xpeek', on: false });
+    ok('yerində telefona baxanda cavab görünür', !!rv && rv.a >= 0 && rv.i === 0, rv ? rv.src : 'gəlmədi');
+    // B imtahanı tərk edir
+    const bo = B.c.waitT('xout', 2000);
+    B.c.send({ t: 'xleave' });
+    ok('imtahanı tərk edən xaric olunur və çölə çıxarılır', (await bo)?.why === 'left' || !!(await bo));
+    // A və G bütün sualları cavablandırır → imtahan bitir
+    const end = A.c.waitT('xend', 4000);
+    for (let i = 0; i < 5; i++) { A.c.send({ t: 'xans', a: rv && i === 0 ? rv.a : 0 }); G.c.send({ t: 'xans', a: 1 }); await sleep(120); }
+    const en = await end;
+    ok('hamı cavab verəndə imtahan bitir, nəticələr gəlir', !!en && en.res.length === 3, en ? en.res.map((r) => `${r.name}:${r.out ? 'out' : r.score}`).join(' ') : '');
+    ok('tərk edən nəticədə xaric kimi görünür', !!en && en.res.find((r) => r.name === 'Beta')?.out === true);
+    G.c.close();
+    await sleep(300);
+  }
+
   // --- 9. Eyni hesabla ikinci giriş, çıxış → NPC ---
   const kicked = B.c.waitT('kicked', 3000);
   const offline = A.c.waitT('entity', 6000, (m) => m.e.id === 'beta' && m.e.online === false);

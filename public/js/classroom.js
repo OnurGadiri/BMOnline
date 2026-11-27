@@ -2,6 +2,7 @@
 // Otaq kampus sərhədindən kənarda ayrıca qapalı məkandır; qapıdan girəndə server oyunçunu bura köçürür.
 import * as THREE from 'three';
 import { buildCharacter, animateRig, makeNameTag, makeSpeechBubble } from './character.js';
+import { mergeGroup } from './merge.js';
 
 function canvasTex(w, h, draw) {
   const c = document.createElement('canvas');
@@ -13,6 +14,8 @@ function canvasTex(w, h, draw) {
   return t;
 }
 const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+// daxili divarlar günəşdən kölgədə qalır — yüngül öz işığı ilə fotodakı kimi parlaq görünsün
+const wallMat = (c, k = 0.42) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: k });
 function box(parent, w, h, d, x, y, z, mat, cast = false) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
@@ -105,24 +108,42 @@ const windowTex = () => canvasTex(128, 128, (g, w, h) => {
   g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(w * 0.1, 0, w * 0.08, h);
 });
 
-/** Kampusda otağa aparan qapı (binanın divarında) */
+/** Kampusda imtahan lobbisinin lövhəsi (Rektorluğun orta qapısının yanında) */
 export function buildRoomDoor(scene, cfg) {
-  const d = cfg.door;
+  const d = cfg.door, [sx, sz] = d.sign || [d.x, d.z];
   const g = new THREE.Group();
-  g.position.set(d.x - Math.sin(d.ry) * 0.27, 0, d.z - Math.cos(d.ry) * 0.27);
+  g.position.set(sx, 0, sz);
   g.rotation.y = d.ry;
-  const glass = new THREE.MeshLambertMaterial({ color: '#2d4a63', emissive: '#0d2236' });
-  box(g, 1.9, 2.5, 0.06, 0, 1.25, 0, lam('#c9ccd1'));
-  box(g, 1.7, 2.35, 0.04, 0, 1.18, 0.03, glass);
-  box(g, 0.04, 2.35, 0.05, 0, 1.18, 0.05, lam('#c9ccd1'));
-  for (const s of [-1, 1]) box(g, 0.04, 0.5, 0.06, s * 0.15, 1.1, 0.09, lam('#e0e0e0'));
-  const sign = canvasTex(512, 110, (q, w, h) => {
+  for (const s of [-0.8, 0.8]) box(g, 0.08, 1.9, 0.08, s, 0.95, 0, lam('#3b4048'), true);
+  const sign = canvasTex(512, 300, (q, w, h) => {
     q.fillStyle = '#d42a2f'; q.fillRect(0, 0, w, h);
-    q.fillStyle = '#fff'; q.font = 'bold 50px Segoe UI, sans-serif'; q.fillText('Kapital Bank Room', 30, 72);
+    q.strokeStyle = '#fff'; q.lineWidth = 6; q.strokeRect(10, 10, w - 20, h - 20);
+    q.fillStyle = '#fff'; q.textAlign = 'center';
+    q.font = 'bold 54px Segoe UI, sans-serif'; q.fillText('Kapital Bank Room', w / 2, 92);
+    q.font = '40px Segoe UI, sans-serif'; q.fillText('📝 C# imtahanı', w / 2, 160);
+    q.font = '30px Segoe UI, sans-serif'; q.fillText('min 3 tələbə · F — qoşul', w / 2, 222);
   });
-  const sg = plane(g, 2.3, 0.5, new THREE.MeshBasicMaterial({ map: sign }), 0, 2.85, 0.05);
-  sg.receiveShadow = false;
+  const board = box(g, 1.9, 1.12, 0.06, 0, 2.2, 0, lam('#eeeeee'), true);
+  board.material = [lam('#ddd'), lam('#ddd'), lam('#ddd'), lam('#ddd'), new THREE.MeshBasicMaterial({ map: sign }), new THREE.MeshBasicMaterial({ map: sign })];
   scene.add(g);
+}
+
+/** NPC sinif yoldaşları üçün təsadüfi (amma toxumdan asılı) görünüş */
+function npcLook(seed) {
+  let x = seed || 1;
+  const r = () => { x = (x * 16807) % 2147483647; return x / 2147483647; };
+  const pick = (a) => a[Math.floor(r() * a.length)];
+  const f = r() < 0.5;
+  return {
+    body: f ? 'f' : 'm',
+    skin: pick(['#f1c9a5', '#e0ac7e', '#c68a5a', '#eabf98']),
+    hair: f ? pick(['long', 'ponytail', 'bob', 'bun']) : pick(['short', 'side', 'curly', 'buzz']),
+    hairColor: pick(['#1a1210', '#2e1d14', '#4a2e1c', '#6b4423']),
+    top: pick(['hoodie', 'sweater', 'tshirt', 'shirt']),
+    topColor: pick(['#1d3557', '#7d8597', '#e63946', '#f1faee', '#2a9d8f', '#333333', '#6a4c93']),
+    pattern: 'plain', bottom: f ? pick(['jeans', 'longskirt']) : pick(['jeans', 'pants']),
+    bottomColor: pick(['#2b4a7a', '#222222', '#4a4e69']), glasses: r() < 0.3 ? 'round' : 'none',
+  };
 }
 
 /** Müəllim (uydurma personaj) */
@@ -136,13 +157,15 @@ const TEACHER_LOOK = {
  * Otağı qurur. ctx: { colliders, seats } — dünyanın massivlərinə əlavə olunur.
  * Qaytarır: otaq haqqında məlumat, müəllim və hər kadr çağırılan update.
  */
-export function buildClassroom(scene, cfg, ctx) {
-  const { x: cx, z: cz, w: W, d: D } = cfg;
+export function buildClassroom(scene, cfg, ctx, inst = 0) {
+  const { x: cx, w: W, d: D } = cfg;
+  const cz = cfg.z + (cfg.gap || 0) * inst;
+  cfg = { ...cfg, z: cz, exit: { x: cfg.exit.x, z: cfg.exit.z + (cfg.gap || 0) * inst } };
   const H = cfg.h || 3.3;
   const x0 = cx - W / 2, x1 = cx + W / 2, z0 = cz - D / 2, z1 = cz + D / 2; // z0 — ön divar (lövhə), z1 — arxa
   const g = new THREE.Group();
   g.name = 'classroom';
-  const white = lam('#f3f3f0');
+  const white = wallMat('#f3f3f0');
 
   // döşəmə və tavan
   plane(g, W, D, new THREE.MeshLambertMaterial({ map: floorTex(W, D) }), cx, 0.012, cz, -Math.PI / 2);
@@ -158,7 +181,7 @@ export function buildClassroom(scene, cfg, ctx) {
 
   // sol divar: qırmızı (ön 2/3), arxası ağ
   const redLen = D * 0.68;
-  blk.push(plane(g, redLen, H, new THREE.MeshLambertMaterial({ map: redWallTex(redLen, H) }), x0 + 0.01, H / 2, z0 + redLen / 2, 0, Math.PI / 2));
+  blk.push(plane(g, redLen, H, (() => { const t = redWallTex(redLen, H); return new THREE.MeshLambertMaterial({ map: t, emissive: '#ffffff', emissiveMap: t, emissiveIntensity: 0.4 }); })(), x0 + 0.01, H / 2, z0 + redLen / 2, 0, Math.PI / 2));
   blk.push(plane(g, D - redLen, H, white, x0 + 0.01, H / 2, z0 + redLen + (D - redLen) / 2, 0, Math.PI / 2));
   // ön divar (ağ) və narıncı sütun sağ küncdə
   blk.push(plane(g, W, H, white, cx, H / 2, z0 + 0.01));
@@ -173,7 +196,7 @@ export function buildClassroom(scene, cfg, ctx) {
   for (let i = 0; i < nWin; i++) {
     const zc = z0 + seg * (i + 0.5);
     const col = i < 2 ? '#f08a24' : '#f6c21c';
-    const wm = lam(col);
+    const wm = wallMat(col, 0.5);
     plane(g, seg, 0.9, wm, x1 - 0.01, 0.45, zc, 0, -Math.PI / 2);               // pəncərə altı
     plane(g, seg, H - 2.55, wm, x1 - 0.01, (H + 2.55) / 2, zc, 0, -Math.PI / 2);  // pəncərə üstü
     plane(g, seg - 2.0, 1.65, wm, x1 - 0.01, 1.72, zc - seg / 2 + (seg - 2.0) / 2, 0, -Math.PI / 2);
@@ -221,7 +244,7 @@ export function buildClassroom(scene, cfg, ctx) {
         box(g, 0.44, 0.05, 0.42, sx, 0.46, sz, seatMat, true);
         box(g, 0.44, 0.4, 0.04, sx, 0.72, sz + 0.2, seatDark, true);
         for (const lx of [-0.18, 0.18]) for (const lz of [-0.17, 0.17]) box(g, 0.03, 0.46, 0.03, sx + lx, 0.23, sz + lz, legMat);
-        const seat = { x: sx, z: sz, ry: Math.PI, out: [0, 0.75], room: cfg.id };
+        const seat = { x: sx, z: sz, ry: Math.PI, out: [0, 0.3], room: cfg.id };
         ctx.seats.push(seat);
         desks.push(seat);
       }
@@ -245,6 +268,7 @@ export function buildClassroom(scene, cfg, ctx) {
     { minX: x0 - T, maxX: x1 + T, minZ: z0 - T, maxZ: z0, h: 10 },
     { minX: x0 - T, maxX: x1 + T, minZ: z1, maxZ: z1 + T, h: 10 },
   );
+  mergeGroup(g); // yüzlərlə parta/stul hissəsi → bir mesh
   scene.add(g);
   ctx.blockers?.push(...blk);
 
@@ -263,29 +287,55 @@ export function buildClassroom(scene, cfg, ctx) {
     teacher.root.add(bubble);
     bubble.userData.until = performance.now() + sec * 1000;
   };
-  const tch = { pos: teacher.root.position, ry: Math.PI, emote: 0, speed: 0, path: null };
-  const aisleX = [cx + (cols[0] + cols[1]) / 2, cx + (cols[1] + cols[2]) / 2];
+  const tch = { x: cx + 1.2, z: z0 + 1.4, ry: 0, moving: false };
+  teacher.root.position.set(tch.x, 0, tch.z);
+  const seats = desks;
+  let npcs = [];
+  function clearNpcs() { for (const n of npcs) scene.remove(n.c.root); npcs = []; }
 
   return {
-    cfg, bounds: { minX: x0, maxX: x1, minZ: z0, maxZ: z1 }, frontZ: z0, rowZ, cols: cols.map((c) => cx + c), aisleX, desks, teacherDesk: td,
+    cfg, inst, bounds: { minX: x0, maxX: x1, minZ: z0, maxZ: z1 }, frontZ: z0, rowZ, seats, teacherDesk: td,
     teacher, tch, say,
-    /** müəllimi hədəfə doğru apar; çatdısa true */
-    walkTo(x, z, dt, speed = 1.3) {
-      const dx = x - tch.pos.x, dz = z - tch.pos.z, d = Math.hypot(dx, dz);
-      if (d < 0.08) { tch.speed = 0; return true; }
-      const step = Math.min(d, speed * dt);
-      tch.pos.x += (dx / d) * step; tch.pos.z += (dz / d) * step;
-      tch.ry = Math.atan2(dx, dz);
-      tch.speed = speed;
-      return false;
+    setTeacher(x, z, ry, moving) { Object.assign(tch, { x, z, ry, moving: !!moving }); },
+    /** NPC tələbələri yerlərinə oturt */
+    spawnNpcs(list) {
+      clearNpcs();
+      for (const n of list) {
+        const c = buildCharacter(npcLook(n.look));
+        const st = seats[n.seat];
+        c.root.position.set(st.x, 0, st.z);
+        c.root.rotation.y = Math.PI;
+        const tg = makeNameTag(n.name, null, '#cfe8ff');
+        tg.position.y = c.height + 0.15;
+        tg.scale.multiplyScalar(0.75);
+        c.root.add(tg);
+        scene.add(c.root);
+        npcs.push({ c, seat: n.seat, name: n.name, cheat: 0, gone: false });
+      }
+    },
+    clearNpcs,
+    npcs: () => npcs,
+    setNpcBits(bits) {
+      bits.forEach((b, i) => {
+        const n = npcs[i];
+        if (!n) return;
+        n.cheat = b === 1;
+        if (b === 2 && !n.gone) { n.gone = true; n.c.root.visible = false; }
+      });
     },
     update(dt) {
       const r = teacher.root;
+      const k = Math.min(1, dt * 8);
+      const bx = r.position.x, bz = r.position.z;
+      r.position.x += (tch.x - r.position.x) * k;
+      r.position.z += (tch.z - r.position.z) * k;
       let diff = tch.ry - r.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       r.rotation.y += diff * Math.min(1, dt * 7);
-      animateRig(teacher.rig, dt, tch.speed > 0 ? 0.45 : 0, { emote: tch.emote });
+      const v = Math.hypot(r.position.x - bx, r.position.z - bz) / Math.max(dt, 1e-3);
+      animateRig(teacher.rig, dt, tch.moving || v > 0.3 ? 0.45 : 0, {});
       if (bubble && performance.now() > bubble.userData.until) { r.remove(bubble); bubble = null; }
+      for (const n of npcs) if (!n.gone) animateRig(n.c.rig, dt, 0, { emote: n.cheat ? 13 : 5 });
     },
   };
 }
