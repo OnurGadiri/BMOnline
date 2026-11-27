@@ -92,6 +92,7 @@ export function initTouch(opts) {
       btn.classList.add('pressed');
       if (code) opts.key(code, true);
       else if (act === 'attack') opts.attack();
+      else if (act === 'menu') document.body.classList.toggle('menu-open');
       else if (act === 'emotes') document.body.classList.toggle('show-emotes');
       else if (act === 'fullscreen') {
         const el = document.documentElement;
@@ -104,6 +105,8 @@ export function initTouch(opts) {
       e.preventDefault();
       btn.classList.remove('pressed');
       if (code) opts.key(code, false);
+      // menyudan bir şey seçiləndə menyu bağlansın
+      if (btn.closest('.ttop') && act !== 'menu') document.body.classList.remove('menu-open');
     };
     btn.addEventListener('touchstart', down, { passive: false });
     btn.addEventListener('touchend', up, { passive: false });

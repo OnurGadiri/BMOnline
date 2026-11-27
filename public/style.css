@@ -297,3 +297,11 @@ body.hide-help .help { display: none !important; }
 body.minimal-ui .hud-top, body.minimal-ui .minimap, body.minimal-ui #chat:not(.typing), body.minimal-ui .weapon-hud,
 body.minimal-ui .hud-right, body.minimal-ui .help, body.minimal-ui .stick-hint, body.minimal-ui .rotate-hint { display: none !important; }
 body.touch .ttop { flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+
+/* Mobil ☰ menyu: üst düymələr yığılır */
+.ttop .tbtn.menu { display: none; }
+body.touch .ttop .tbtn.menu { display: block; background: #1b2838cc; }
+body.touch:not(.menu-open) .ttop .tbtn:not(.menu) { display: none; }
+body.touch.menu-open .ttop .tbtn.menu { background: #ffd166; color: #1b2838; }
+body.touch .emote-toggle { display: none; }
+body.touch .emote-list { max-width: 90vw; justify-content: center; }

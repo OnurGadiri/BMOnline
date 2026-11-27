@@ -713,6 +713,10 @@ setMinimal(!!settings.minimal);
 // Birinci şəxs görünüşü
 function toggleFirstPerson(on = !cam.fp) {
   cam.fp = on;
+  fpInit = false;
+  // üçüncü şəxsdəki "yuxarıdan baxış" birinci şəxsdə yerə baxmaq olardı — üfüqə yaxın başla
+  if (on) cam.pitch = Math.min(cam.pitch, 0.08);
+  else cam.pitch = Math.max(0.15, Math.min(1.25, cam.pitch));
   if (player.char) player.char.rig.head.visible = !on;
   document.body.classList.toggle('fp', on);
   toast(on ? '👁 Birinci şəxs (V — geri)' : '🎥 Üçüncü şəxs');
@@ -1040,13 +1044,20 @@ function bigBanner(text) {
 
 const aimOffset = new THREE.Vector3();
 const eyePos = new THREE.Vector3();
+const fpTarget = new THREE.Vector3();
+let fpInit = false;
 function updateCamera(dt) {
   // Birinci şəxs: kamera başın içində, baxış istiqaməti kameranın yaw/pitch-i ilə
   if (cam.fp && !player.dead && player.char) {
     player.char.root.updateMatrixWorld(true);
-    player.char.rig.head.getWorldPosition(eyePos);
-    eyePos.y += 0.2 * (state.appearance?.height || 1);
+    player.char.rig.head.getWorldPosition(fpTarget);
+    fpTarget.y += 0.2 * (state.appearance?.height || 1);
     const cp = Math.cos(cam.pitch);
+    // göz bir az irəlidə olsun ki, aşağı baxanda bədənin içi görünməsin
+    fpTarget.x -= Math.sin(cam.yaw) * 0.14; fpTarget.z -= Math.cos(cam.yaw) * 0.14;
+    // yerişdə başın silkələnməsini yumşalt (ani sıçrayışlarda — teleport, respawn — birbaşa keç)
+    if (!fpInit || eyePos.distanceToSquared(fpTarget) > 4) { eyePos.copy(fpTarget); fpInit = true; }
+    else eyePos.lerp(fpTarget, Math.min(1, dt * 18));
     camera.position.copy(eyePos);
     camera.lookAt(eyePos.x - Math.sin(cam.yaw) * cp, eyePos.y - Math.sin(cam.pitch), eyePos.z - Math.cos(cam.yaw) * cp);
     camera.aspect = canvas.clientWidth / canvas.clientHeight;

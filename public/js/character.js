@@ -611,12 +611,12 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.headX = -0.05; T.headY = 0;
   } else if (emote === 8) {
     // hərbi salam: sağ əl alına
-    T.armRx = -1.25; T.armRz = -0.95; T.elbowR = -2.35; T.elbowRz = 0.2;
+    T.armRx = -1.75; T.armRz = -0.55; T.elbowR = -2.25; T.elbowRz = 0.35;
     T.armLx = 0; T.armLz = 0.04; T.elbowL = 0;
     T.headX = -0.06; T.headY = 0; T.spineX = -0.03;
   } else if (emote === 9) {
     // düşünmək: sağ əl çənədə, sol əl qarında
-    T.armRx = -1.05; T.armRz = 0.3; T.elbowR = -2.25;
+    T.armRx = -1.25; T.armRz = 0.5; T.elbowR = -2.55;
     T.armLx = -0.55; T.armLz = -0.45; T.elbowL = -1.35;
     T.headX = 0.18; T.headY = Math.sin(t * 0.7) * 0.25;
   } else if (emote === 10) {
@@ -627,7 +627,7 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.headX = -0.35 + sh * 0.08; T.headY = 0;
   } else if (emote === 11) {
     // üz-əl (facepalm)
-    T.armRx = -1.35; T.armRz = 0.4; T.elbowR = -2.05;
+    T.armRx = -1.6; T.armRz = 0.95; T.elbowR = -2.3;
     T.armLx = 0.05; T.armLz = 0.1; T.elbowL = -0.2;
     T.headX = 0.38; T.headY = Math.sin(t * 2.2) * 0.12;
     T.spineX = 0.08;
