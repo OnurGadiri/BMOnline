@@ -19,6 +19,8 @@ export function initExam(d) {
   // ---------- lobbi paneli (Rektorluğun qapısında) ----------
   const lob = $('xlobby');
   $('xl-close').onclick = () => { lob.hidden = true; };
+  // gözləmə zolağına klik — lobbi paneli açılır (host oradan başladır)
+  $('xwait').onclick = () => { lob.hidden = false; renderLobby(); if (document.pointerLockElement) document.exitPointerLock(); };
   function renderLobby() {
     if (lob.hidden) return;
     const box = $('xl-list');
@@ -27,21 +29,34 @@ export function initExam(d) {
     if (!ex.list.length) box.append(el('div', 'xl-empty', 'Hələ açıq otaq yoxdur. Birinci sən aç!'));
     for (const s of ex.list) {
       const card = el('div', 'xl-card');
-      const st = { lobby: `Gözlənilir ${s.n}/${s.min}`, count: `Başlayır: ${Math.ceil(s.start)} san`, exam: `İmtahan gedir · ${Math.ceil(s.left)} san`, done: 'Bitdi' }[s.state];
+      const st = { lobby: s.n >= s.min ? `Hazırdır ${s.n}/${s.max}` : `Gözlənilir ${s.n}/${s.min}`, count: `Başlayır: ${Math.ceil(s.start)} san`,
+        exam: `İmtahan gedir · ${Math.ceil(s.left)} san`, done: 'Bitdi' }[s.state];
       const h = el('div', 'xl-head');
-      h.append(el('b', null, `Otaq #${s.id}`), el('span', 'xl-st ' + s.state, st));
-      card.append(h, el('div', 'xl-names', s.names.join(', ') || '—'));
-      if ((s.state === 'lobby' || s.state === 'count') && !mine && s.n < s.max) {
-        const b = el('button', 'xl-join', 'Qoşul');
+      const title = el('b', null, `Otaq #${s.id}`);
+      title.append(el('span', 'xl-host', `👑 ${s.host}`));
+      h.append(title, el('span', 'xl-st ' + s.state, st));
+      card.append(h, el('div', 'xl-names', `${s.names.join(', ') || '—'}  (${s.n}/${s.max})`));
+      const join = (label) => {
+        const b = el('button', 'xl-join', label);
         b.type = 'button';
         b.onclick = () => d.send({ t: 'xjoin', id: s.id });
         card.append(b);
-      }
+      };
+      if ((s.state === 'lobby' || s.state === 'count') && !mine && !inExam() && s.n < s.max) join('Qoşul');
+      // gedən imtahana sonradan qoşulmaq (xaric olunduğun otağa yox)
+      else if (s.late && !mine && !inExam() && !s.names.includes(d.state.name)) join('Gec qoşul ⏱');
       box.append(card);
     }
     const acts = $('xl-acts');
     acts.replaceChildren();
     if (mine) {
+      if (mine.state === 'lobby' && mine.host === d.state.name) {
+        const go = el('button', 'xl-go', mine.n >= mine.min ? '▶ İmtahanı başlat' : `▶ Başlat (ən az ${mine.min} nəfər)`);
+        go.type = 'button';
+        go.disabled = mine.n < mine.min;
+        go.onclick = () => d.send({ t: 'xgo' });
+        acts.append(go);
+      } else if (mine.state === 'lobby') acts.append(el('span', 'xl-note', `👑 ${mine.host} başladacaq`));
       const b = el('button', 'ghost', 'Lobbidən çıx');
       b.type = 'button';
       b.onclick = () => d.send({ t: 'xleave' });
@@ -121,8 +136,8 @@ export function initExam(d) {
           panel.hidden = false;
           document.body.classList.add('in-exam');
           renderQ();
-          d.bigBanner('📝 İmtahan başladı!');
-          r.say('İmtahan başladı. Hər kəs öz vərəqinə baxsın!', 3);
+          d.bigBanner(m.late ? `📝 Gec qoşuldun — ${Math.ceil(m.time)} san qalıb!` : '📝 İmtahan başladı!');
+          if (!m.late) r.say('İmtahan başladı. Hər kəs öz vərəqinə baxsın!', 3);
           break;
         }
         case 'xs': {
@@ -184,8 +199,13 @@ export function initExam(d) {
       // lobbi gözləmə göstəricisi
       const mine = myLobby();
       const w = $('xwait');
-      const txt = mine ? (mine.state === 'count' ? `📝 İmtahan ${Math.max(0, Math.ceil(mine.start))} saniyəyə başlayır… (${mine.n} nəfər)` : `📝 İmtahan lobbisi: ${mine.n}/${mine.min} — daha ${mine.min - mine.n} tələbə lazımdır`) : '';
+      const host = mine && mine.host === d.state.name;
+      const txt = !mine ? ''
+        : mine.state === 'count' ? `📝 İmtahan ${Math.max(0, Math.ceil(mine.start))} saniyəyə başlayır… (${mine.n} nəfər)`
+        : mine.n < mine.min ? `📝 İmtahan lobbisi: ${mine.n}/${mine.min} — daha ${mine.min - mine.n} tələbə lazımdır`
+        : host ? `📝 ${mine.n} nəfər hazırdır — başlatmaq üçün bura klik et ▶` : `📝 ${mine.n} nəfər hazırdır — 👑 ${mine.host} başlatmalıdır`;
       if (w.textContent !== txt) { w.textContent = txt; w.hidden = !txt; }
+      w.classList.toggle('click', !!mine && mine.state === 'lobby');
       if (!inExam() || !ex.xs) return;
       const m = ex.xs;
       if (!d.player.sitting && ex.peek && d.player.emote === 13) d.player.emote = 0;

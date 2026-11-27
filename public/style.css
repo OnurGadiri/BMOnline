@@ -418,3 +418,9 @@ body.touch .xwait { top: 96px; font-size: 12px; }
 .lock-hint { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); background: #000b; color: #fff; padding: 6px 12px; border-radius: 10px; font-size: 13px; pointer-events: none; z-index: 5; }
 .lock-hint[hidden] { display: none; }
 body.photo .lock-hint, body.minimal-ui .lock-hint { display: none; }
+/* imtahan lobbisi: host üçün başlat düyməsi, gözləmə zolağı kliklənir */
+.xwait.click { pointer-events: auto; cursor: pointer; }
+.xl-host { font-size: 11px; color: #ffd166; margin-left: 6px; }
+.xl-go { background: #2e9e5b; }
+.xl-go:disabled { background: #555; cursor: not-allowed; opacity: .8; }
+.xl-note { font-size: 12px; opacity: .8; align-self: center; }

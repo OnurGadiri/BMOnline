@@ -930,7 +930,8 @@ document.addEventListener('pointerlockerror', () => {
   toast('Siçan kilidlənmədi — bir saniyə sonra ekrana yenidən klik et.');
 });
 function updateLockHint() {
-  const show = settings.lock && !TOUCH && state.mode === 'game' && document.pointerLockElement !== canvas;
+  const show = settings.lock && !TOUCH && state.mode === 'game' && document.pointerLockElement !== canvas
+    && !document.querySelector('.gpanel:not([hidden]), #settings:not([hidden])'); // panel açıqdırsa göstərmə
   $('lock-hint').hidden = !show;
 }
 document.addEventListener('pointerlockchange', updateLockHint);

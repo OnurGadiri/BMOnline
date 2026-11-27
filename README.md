@@ -86,14 +86,17 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 - **Basketball:** hold **F** next to the ball on the volleyball court and release in the middle of the
   power bar to shoot at the hoop on the wall (+10 XP per basket).
 - **Kapital Bank Room — C# exam cheating mission (multiplayer):** press **F** at the middle door of the
-  rectorate to open the exam lobby, join a room or open a new one. With at least **3 students** the exam
-  starts automatically after a 10-second countdown and everyone is seated in the Kapital Bank Room classroom
+  rectorate to open the exam lobby, join a room or open a new one (**3–8 students** per room). The player who
+  opened the room (👑 host) starts the exam with **▶ İmtahanı başlat** once at least 3 students have joined; after a
+  5-second countdown everyone is seated in the Kapital Bank Room classroom
   (red graduation-cap wall, orange/yellow window wall, desks, screen) next to fictional NPC classmates.
   The (fictional) teacher writes on the board, turns around, watches the class and walks the aisles.
   Hold **F** at your desk to peek at your phone, or stand up, walk next to a classmate (NPC or player) and
   hold **F** to copy from their paper — fast, but they may be wrong. Answers (**1-3**) can only be written
   at your own desk. If the teacher sees you out of your seat or cheating, suspicion rises; when it is full
   you are thrown out of the exam and wait for the others to finish — or open a new room with new players.
+  Latecomers can still join a running exam (**Gec qoşul ⏱**) while there is a free place and more than 30 seconds
+  left; they get a free desk and the remaining time. A student who was thrown out cannot rejoin the same exam.
   Up to 3 exams can run at the same time; results and XP are announced when everyone has finished.
 - **Fast travel:** press **T** (or 🧭 in the mobile menu) to teleport to the rectorate (exam lobby), the central
   plaza, the pitches, the gallows or the other buildings. Not available in combat (6 s without damage), during

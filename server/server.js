@@ -631,6 +631,8 @@ function examList() {
       names: [...S.members.values()].map((p) => nameOf(p.key)), host: nameOf(S.host),
       start: S.state === 'count' ? Math.max(0, (S.startAt - Date.now()) / 1000) : 0,
       left: S.state === 'exam' ? Math.max(0, (S.endsAt - Date.now()) / 1000) : 0,
+      // gedən imtahana sonradan qoşulmaq olarmı (yer var və vaxt çoxdur)
+      late: S.state === 'exam' && [...S.members.values()].filter((p) => p.st === 'in').length < EXAM_CFG.max && S.endsAt - Date.now() > 30000,
     })),
   };
 }
@@ -655,8 +657,7 @@ function examCreate(ws) {
   const S = { id: ++examSeq, inst, host: ws.key, state: 'lobby', members: new Map(), startAt: 0, endsAt: 0 };
   examSessions.set(S.id, S);
   S.members.set(ws.key, { key: ws.key, st: 'lobby' });
-  broadcast({ t: 'sys', msg: `📝 ${nameOf(ws.key)} Rektorluqda yeni C# imtahan otağı açdı — qoşulmaq üçün orta qapıya gəl! (min ${EXAM_CFG.min} nəfər)` });
-  examCheckCount(S);
+  broadcast({ t: 'sys', msg: `📝 ${nameOf(ws.key)} Rektorluqda yeni C# imtahan otağı açdı — qoşulmaq üçün orta qapıya gəl! (${EXAM_CFG.min}–${EXAM_CFG.max} nəfər)` });
   pushExamList();
 }
 function examJoin(ws, id) {
@@ -666,17 +667,49 @@ function examJoin(ws, id) {
   if (cur && cur.members.get(ws.key).st !== 'out') return;
   let S = id ? examSessions.get(Number(id)) : [...examSessions.values()].find((x) => x.state === 'lobby' || x.state === 'count');
   if (!S) return examCreate(ws);
-  if (S.state !== 'lobby' && S.state !== 'count') return send(ws, { t: 'sys', msg: 'Bu imtahan artıq başlayıb — yeni otaq aç və ya gözlə.' });
+  if (S.state === 'exam') return examLateJoin(ws, S, cur);
+  if (S.state !== 'lobby' && S.state !== 'count') return send(ws, { t: 'sys', msg: 'Bu imtahan artıq bitir — yeni otaq aç.' });
   if (S.members.size >= EXAM_CFG.max) return send(ws, { t: 'sys', msg: 'Otaq doludur.' });
   if (cur) cur.members.delete(ws.key);
   S.members.set(ws.key, { key: ws.key, st: 'lobby' });
-  examCheckCount(S);
+  if (S.state === 'lobby' && S.members.size === EXAM_CFG.min) {
+    const hw = sockets.get(S.host);
+    if (hw) send(hw, { t: 'sys', msg: `📝 Otağında ${EXAM_CFG.min} nəfər var — imtahanı başlada bilərsən (lobbidə ▶ Başlat).` });
+  }
+  pushExamList();
+}
+/** gedən imtahana sonradan qoşulmaq: boş yerə oturdulur, qalan vaxtla yazır */
+function examLateJoin(ws, S, cur) {
+  if (cur === S) return send(ws, { t: 'sys', msg: 'Bu imtahandan xaric olunmusan — digərləri bitirənə qədər gözlə və ya yeni otaq aç.' });
+  if ([...S.members.values()].filter((p) => p.st === 'in').length >= EXAM_CFG.max) return send(ws, { t: 'sys', msg: 'Otaq doludur.' });
+  if (S.endsAt - Date.now() < 30000) return send(ws, { t: 'sys', msg: 'İmtahanın bitməsinə az qalıb — qoşulmaq olmaz.' });
+  const used = new Set([...S.members.values()].filter((p) => p.st === 'in').map((p) => p.seat));
+  for (const n of S.npcs) used.add(n.seat);
+  const order = [...S.L.seats.keys()].sort((a, b) => (a >= 6 && a < 30 ? 0 : 1) - (b >= 6 && b < 30 ? 0 : 1));
+  const seat = order.find((i) => !used.has(i));
+  if (seat == null) return send(ws, { t: 'sys', msg: 'Sinifdə boş yer qalmayıb.' });
+  if (cur) cur.members.delete(ws.key);
+  const p = { key: ws.key, st: 'in', seat, i: 0, ans: [], sus: 0, peek: false, prog: 0, tgt: null, seen: false };
+  S.members.set(ws.key, p);
+  const s = S.L.seats[seat];
+  tpTo(ws.key, s.x, s.z);
+  send(ws, { t: 'xstart', id: S.id, inst: S.inst, seat, qs: S.qs.map(({ q, o }) => ({ q, o })), time: Math.round((S.endsAt - Date.now()) / 1000),
+    npcs: S.npcs.map((n) => ({ name: n.name, seat: n.seat, look: n.look })), late: true });
+  sendS(S, { t: 'xsay', text: `${nameOf(ws.key)}, gecikmisən! Tez otur, vaxt gedir.` });
+  pushExamList();
+}
+/** otağı quran (host) imtahanı başladır — ən az EXAM_CFG.min nəfər lazımdır */
+function examGo(ws) {
+  const S = examOf(ws.key);
+  if (!S || S.state !== 'lobby') return;
+  if (S.host !== ws.key) return send(ws, { t: 'sys', msg: 'İmtahanı yalnız otağı quran başlada bilər.' });
+  if (S.members.size < EXAM_CFG.min) return send(ws, { t: 'sys', msg: `Başlamaq üçün ən az ${EXAM_CFG.min} nəfər lazımdır.` });
+  S.state = 'count';
+  S.startAt = Date.now() + EXAM_CFG.countdown * 1000;
   pushExamList();
 }
 function examCheckCount(S) {
-  const n = S.members.size;
-  if (S.state === 'lobby' && n >= EXAM_CFG.min) { S.state = 'count'; S.startAt = Date.now() + EXAM_CFG.countdown * 1000; }
-  else if (S.state === 'count' && n < EXAM_CFG.min) S.state = 'lobby';
+  if (S.state === 'count' && S.members.size < EXAM_CFG.min) S.state = 'lobby';
 }
 /** Oyunçu otaqdan/lobbidən çıxır (və ya oyundan gedir) */
 function examLeave(key, why = 'left') {
@@ -1181,6 +1214,7 @@ wss.on('connection', (ws, req) => {
       if (!e || !EXAM_ROOM || Math.hypot(e.x - EXAM_ROOM.door.x, e.z - EXAM_ROOM.door.z) > 5) return;
       return m.new ? examCreate(ws) : examJoin(ws, m.id);
     }
+    if (m.t === 'xgo' && ws.inGame) return examGo(ws);
     if (m.t === 'xleave' && ws.inGame) {
       const S = examOf(ws.key), inside = S?.state === 'exam' && S.members.get(ws.key).st === 'in';
       examLeave(ws.key, 'left');

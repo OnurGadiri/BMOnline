@@ -296,10 +296,16 @@ async function enter(name, pin = '1234') {
     const l2 = A.c.waitT('xlist', 2000, (m) => m.s.some((s) => s.n === 2 && s.state === 'lobby'));
     B.c.send({ t: 'xjoin' });
     ok('2 nəfərlə imtahan başlamır (min 3)', !!(await l2));
-    const cnt = A.c.waitT('xlist', 2000, (m) => m.s.some((s) => s.state === 'count' && s.n === 3));
+    const l3 = A.c.waitT('xlist', 2000, (m) => m.s.some((s) => s.state === 'lobby' && s.n === 3 && s.host === 'Alfa'));
     G.c.send({ t: 'xjoin' });
-    ok('3-cü tələbə qoşulanda geri sayım başlayır', !!(await cnt));
-    const [sa, sb, sg] = await Promise.all([A, B, G].map((P) => P.c.waitT('xstart', 13000)));
+    ok('3 nəfər olanda imtahan özü başlamır — otağı quran başladır', !!(await l3));
+    const notHost = B.c.waitT('sys', 1500, (m) => /yalnız otağı quran/.test(m.msg));
+    B.c.send({ t: 'xgo' });
+    ok('otağı qurmayan imtahanı başlada bilməz', !!(await notHost));
+    const cnt = A.c.waitT('xlist', 2000, (m) => m.s.some((s) => s.state === 'count' && s.n === 3));
+    A.c.send({ t: 'xgo' });
+    ok('otağı quran 3 nəfərlə başladanda geri sayım başlayır', !!(await cnt));
+    const [sa, sb, sg] = await Promise.all([A, B, G].map((P) => P.c.waitT('xstart', 9000)));
     ok('imtahan avtomatik başlayır (hamıya suallar gəlir)', !!(sa && sb && sg) && sa.qs.length === 5 && sa.npcs.length > 0, sa ? `${sa.qs.length} sual, ${sa.npcs.length} NPC` : '');
     ok('hər tələbəyə ayrı yer verilir', !!sa && new Set([sa.seat, sb?.seat, sg?.seat]).size === 3);
     // telefona bax (öz yerində)
@@ -312,11 +318,26 @@ async function enter(name, pin = '1234') {
     const bo = B.c.waitT('xout', 2000);
     B.c.send({ t: 'xleave' });
     ok('imtahanı tərk edən xaric olunur və çölə çıxarılır', (await bo)?.why === 'left' || !!(await bo));
-    // A və G bütün sualları cavablandırır → imtahan bitir
+    // xaric olunan eyni imtahana geri qayıda bilməz
+    const noBack = B.c.waitT('sys', 1500, (m) => /xaric olunmusan/.test(m.msg));
+    B.c.send({ t: 'xjoin', id: sa.id });
+    ok('xaric olunan həmin imtahana geri qoşula bilmir', !!(await noBack));
+    // yeni tələbə gedən imtahana sonradan qoşulur
+    const E = await enter('Epsilon');
+    const eTp = E.c.waitT('correct', 2000);
+    E.c.send({ t: 'tp', id: 'rect' });
+    await eTp;
+    await sleep(150);
+    const late = E.c.waitT('xstart', 2000);
+    E.c.send({ t: 'xjoin', id: sa.id });
+    const lt = await late;
+    ok('gedən imtahana sonradan qoşulmaq olur (boş yer + qalan vaxt)', !!lt && lt.late === true && lt.qs.length === 5 && lt.time > 30 && lt.time < 180 && ![sa.seat, sg?.seat].includes(lt.seat), lt ? `yer ${lt.seat}, ${lt.time} san` : 'gəlmədi');
+    // A, G və E bütün sualları cavablandırır → imtahan bitir
     const end = A.c.waitT('xend', 4000);
-    for (let i = 0; i < 5; i++) { A.c.send({ t: 'xans', a: rv && i === 0 ? rv.a : 0 }); G.c.send({ t: 'xans', a: 1 }); await sleep(120); }
+    for (let i = 0; i < 5; i++) { A.c.send({ t: 'xans', a: rv && i === 0 ? rv.a : 0 }); G.c.send({ t: 'xans', a: 1 }); E.c.send({ t: 'xans', a: 2 }); await sleep(120); }
     const en = await end;
-    ok('hamı cavab verəndə imtahan bitir, nəticələr gəlir', !!en && en.res.length === 3, en ? en.res.map((r) => `${r.name}:${r.out ? 'out' : r.score}`).join(' ') : '');
+    ok('hamı cavab verəndə imtahan bitir, nəticələr gəlir', !!en && en.res.length === 4, en ? en.res.map((r) => `${r.name}:${r.out ? 'out' : r.score}`).join(' ') : '');
+    E.c.close();
     ok('tərk edən nəticədə xaric kimi görünür', !!en && en.res.find((r) => r.name === 'Beta')?.out === true);
     G.c.close();
     await sleep(300);
