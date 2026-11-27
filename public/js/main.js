@@ -269,6 +269,20 @@ function handle(m) {
     case 'kickFx': {
       const o = others.get(m.id);
       if (o) { o.punchT = 0.001; sfx.kick(volumeAt(o.char.root.position)); }
+      const kb = play?.balls.get(m.ball);
+      if (kb) { kb.kickBy = m.id; kb.kickAt = performance.now(); }
+      break;
+    }
+    case 'kickoff': {
+      if (!m.side) { kickoffs.delete(m.ball); break; }
+      kickoffs.set(m.ball, { side: m.side, until: performance.now() + 8000 });
+      const mm = matchList.find((x) => x.id === m.id);
+      const c = MATCHES.find((x) => x.id === m.id);
+      if (mm && (mySide(mm) || venuesHere().some((v) => v.id === m.id))) {
+        const team = c?.names?.[m.side] || m.side;
+        const mine = mySide(mm) === m.side;
+        toast(c?.ball === 'volley' ? `🏐 Servis: ${team}${mine ? ' — sən vur!' : ''}` : `${mine ? '▶ Topu SİZ başlayırsınız' : `⏳ Topu ${team} başlayır`}`);
+      }
       break;
     }
     case 'score':
@@ -1154,6 +1168,8 @@ function interactUp() {
 function kickBall(b, p) {
   const vb = b?.cfg.kind === 'volleyball';
   if (!b || player.dead || Math.hypot(b.px - player.pos.x, b.pz - player.pos.z) > (vb ? 2.7 : 2.3)) return;
+  if (!canKickBall(b)) return; // server onsuz da rədd edir — top yerli olaraq tərpənib geri sıçramasın
+  b.kickBy = state.myId; b.kickAt = performance.now();
   let v;
   if (vb) {
     // tora doğru hündür qövs; güc uçuş məsafəsini təyin edir
@@ -1198,7 +1214,38 @@ function updateInteractions(dt) {
   $('charge').hidden = !inter.charging;
   $('charge-fill').style.width = `${inter.charge * 100}%`;
   $('charge').classList.toggle('basket', inter.ball?.cfg.kind === 'basketball');
-  play?.update(dt, clock.elapsedTime, player.pos, !player.dead && state.mode === 'game', send);
+  play?.update(dt, clock.elapsedTime, player.pos, !player.dead && state.mode === 'game', send, ballBodies);
+}
+// Topa dəyən bədənlər (klient proqnozu üçün, server də eyni qaydanı tətbiq edir):
+// matç gedirsə yalnız matç oyunçuları, vuran oyunçu 0.3 san nəzərə alınmır
+function ballMatch(b) {
+  const c = MATCHES.find((x) => x.ball === b.cfg.id);
+  const mm = c && matchList.find((x) => x.id === c.id);
+  return mm && (mm.state === 'play' || mm.state === 'count') ? mm : null;
+}
+function ballBodies(b) {
+  const bd = b.cfg.bounds, now = performance.now(), out = [];
+  const mm = ballMatch(b);
+  const add = (id, p) => {
+    if (p.x < bd.minX - 1 || p.x > bd.maxX + 1 || p.z < bd.minZ - 1 || p.z > bd.maxZ + 1) return;
+    if (mm && !mm.kA.includes(id) && !mm.kB.includes(id)) return;
+    if (b.kickBy === id && now - b.kickAt < 300) return;
+    out.push(p);
+  };
+  if (!player.dead && state.mode === 'game') add(state.myId, player.pos);
+  for (const [id, o] of others) if (!o.dead) add(id, o.char.root.position);
+  return out;
+}
+// Başlanğıc vuruşu: qol buraxan komanda başlayır (server göndərir)
+const kickoffs = new Map(); // ball id -> { side, until }
+function canKickBall(b) {
+  const mm = ballMatch(b);
+  if (!mm) return true;
+  const side = mySide(mm);
+  if (!side) { toast('⛔ Burada matç gedir — topa yalnız oyunçular toxuna bilər.'); return false; }
+  const ko = kickoffs.get(b.cfg.id);
+  if (mm.state === 'play' && ko && performance.now() < ko.until && ko.side !== side) { toast('⏳ Başlanğıc vuruşunu rəqib edir — gözlə.'); return false; }
+  return true;
 }
 
 // ---------- Matçlar (futbol / basketbol / voleybol — 1v1, 2v2) ----------

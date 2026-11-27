@@ -514,6 +514,26 @@ export function buildWorld(scene, campus, quality = 'high') {
         const bar = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.2, 0.2), gm);
         bar.position.set(a.x, 2.4, gz);
         scene.add(bar);
+        // qapı toru (arxa, yanlar, dam) — top və oyunçular qapıya arxadan/yandan girə bilməz (serverdə GOAL_DEPTH = 1.6)
+        const depth = 1.6, zb = gz + side * depth;
+        const gnet = new THREE.MeshLambertMaterial({ color: '#f4f4f4', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+        const back = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 2.4), gnet);
+        back.position.set(a.x, 1.2, zb);
+        const roof = new THREE.Mesh(new THREE.PlaneGeometry(7.2, depth), gnet);
+        roof.rotation.x = -Math.PI / 2;
+        roof.position.set(a.x, 2.4, gz + side * depth / 2);
+        scene.add(back, roof);
+        for (const dx of [-3.6, 3.6]) {
+          const sn = new THREE.Mesh(new THREE.PlaneGeometry(depth, 2.4), gnet);
+          sn.rotation.y = Math.PI / 2;
+          sn.position.set(a.x + dx, 1.2, gz + side * depth / 2);
+          scene.add(sn);
+          const bp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.4, 0.08), gm); // arxa dirəklər
+          bp.position.set(a.x + dx, 1.2, zb);
+          scene.add(bp);
+          colliders.push({ minX: a.x + dx - 0.06, maxX: a.x + dx + 0.06, minZ: Math.min(gz, zb), maxZ: Math.max(gz, zb), h: 2.4 });
+        }
+        colliders.push({ minX: a.x - 3.7, maxX: a.x + 3.7, minZ: zb - 0.06, maxZ: zb + 0.06, h: 2.4 });
       }
       const netMat = new THREE.MeshLambertMaterial({ color: '#2d5a3a', transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
       for (const [w, d, x, z, ry] of [[a.w + 4, 0, a.x, a.z - a.d / 2 - 2, 0], [a.w + 4, 0, a.x, a.z + a.d / 2 + 2, 0], [a.d + 4, 0, a.x - a.w / 2 - 2, a.z, Math.PI / 2], [a.d + 4, 0, a.x + a.w / 2 + 2, a.z, Math.PI / 2]]) {

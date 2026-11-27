@@ -48,6 +48,9 @@ function starGeometry() {
   return g;
 }
 
+// Qapı çərçivəsi və oyunçu bədəni — serverlə ortaq fayl (ballphys.js, index.html-də adi skript kimi yüklənir)
+const { goalFrame, bodyHits, substeps } = globalThis.BallPhys;
+
 export class Play {
   constructor(scene, campus, sfx) {
     this.scene = scene;
@@ -87,10 +90,10 @@ export class Play {
     }
     return best ? { ball: best, dist: bd } : null;
   }
-  stepBall(b, dt, listenerPos) {
+  stepBall(b, dt, listenerPos, bodies = []) {
     const c = b.cfg;
     if (b.hold) return;
-    const prev = b.pz, prevY = b.py;
+    const prev = b.pz, prevY = b.py, prevX = b.px;
     const vy0 = b.vy;
     b.vy -= BALL_G * dt;
     b.px += b.vx * dt; b.py += ((vy0 + b.vy) / 2) * dt; b.pz += b.vz * dt; // serverlə eyni inteqrasiya
@@ -99,6 +102,9 @@ export class Play {
       b.pz = n.z + Math.sign(prev - n.z) * (c.r + 0.02);
       b.vz = -b.vz * 0.3; b.vx *= 0.6;
     }
+    const pv = { x: prevX, y: prevY, z: prev };
+    for (const g of c.goals || []) goalFrame(b, pv, g, Math.sign(g.z - c.z), c.r);
+    if (bodies.length) bodyHits(b, pv, bodies, c.r);
     if (b.py < c.r) {
       const hit = -b.vy;
       b.py = c.r;
@@ -135,9 +141,11 @@ export class Play {
     this.pending.delete(id);
   }
 
-  update(dt, t, playerPos, canCollect, send) {
+  update(dt, t, playerPos, canCollect, send, bodiesFor = null) {
     for (const b of this.balls.values()) {
-      this.stepBall(b, dt, playerPos);
+      const bodies = bodiesFor ? bodiesFor(b) : [];
+      const n = substeps(b, dt);
+      for (let i = 0; i < n; i++) this.stepBall(b, dt / n, playerPos, bodies);
       const sp = Math.hypot(b.vx, b.vz);
       if (sp > 0.01 && b.py <= b.cfg.r + 0.02) {
         const axis = new THREE.Vector3(b.vz / sp, 0, -b.vx / sp);

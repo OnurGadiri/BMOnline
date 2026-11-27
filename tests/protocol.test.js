@@ -263,21 +263,58 @@ async function enter(name, pin = '1234') {
   ok('hər iki komanda dolanda geri sayım başlayır', !!(await cnt));
   const cA = await corrA;
   ok('oyunçular öz meydança tərəfinə köçürülür', !!cA && cA.z < -240.2, cA ? `${cA.x},${cA.z}` : '');
+  const koMsg = A.c.waitT('kickoff', 7000, (m) => m.id === 'volleyball' && m.side);
   const started = await A.c.waitT('mstart', 7000);
   ok('matç başlayır', !!started);
+  const ko = await koMsg;
+  ok('ilk servisi vuran komanda püşklə seçilir və hamıya bildirilir', ko?.side === 'A' || ko?.side === 'B', ko?.side);
   await sleep(150);
   const vRow = A.c.msgs.filter((m) => m.t === 'balls').pop().b.find((r) => r[0] === 'volley');
   ok('voleybol topu servis üçün havada gözləyir', vRow && vRow[7] === 1 && vRow[2] > 1.5, JSON.stringify(vRow));
+  const [srv, rcv, sSide] = ko?.side === 'B' ? [B, A, 'B'] : [A, B, 'A'];
+  // servisi rəqib komanda vura bilməz
+  const noServe = rcv.c.waitT('sys', 1500, (m) => /rəqib/.test(m.msg));
+  rcv.c.send({ t: 'kick', id: 'volley', v: [0, 5, 0] });
+  ok('servisi yalnız servis növbəsi olan komanda vurur', !!(await noServe));
   // servis: rəqibin meydançasına
-  const scoreA = A.c.waitT('mscore', 4000, (m) => m.id === 'volleyball');
-  const T = 1.4, dz = -236 - vRow[3], dx = 74 - vRow[1];
-  A.c.send({ t: 'kick', id: 'volley', v: [dx / T, (0.15 - vRow[2] + 6 * T * T) / T, dz / T] });
-  const sc = await scoreA;
-  ok('top rəqib meydançasına düşəndə xal verilir', sc?.side === 'A' && sc.score.A === 1, JSON.stringify(sc?.score));
+  const scoreS = A.c.waitT('mscore', 4000, (m) => m.id === 'volleyball');
+  const T = 1.4, dz = (sSide === 'A' ? -236 : -244) - vRow[3], dx = 74 - vRow[1];
+  srv.c.send({ t: 'kick', id: 'volley', v: [dx / T, (0.15 - vRow[2] + 6 * T * T) / T, dz / T] });
+  const sc = await scoreS;
+  ok('top rəqib meydançasına düşəndə xal verilir', sc?.side === sSide && sc.score[sSide] === 1, JSON.stringify(sc?.score));
+  // xalı qazanan növbəti servisi vurur (voleybol qaydası)
+  const ko2 = await A.c.waitT('kickoff', 3000, (m) => m.id === 'volleyball' && m.side);
+  ok('xalı qazanan komanda növbəti servisi vurur', ko2?.side === sSide, ko2?.side);
   const ended = A.c.waitT('mend', 2500, (m) => m.id === 'volleyball');
   B.c.send({ t: 'match', act: 'leave', id: 'volleyball' });
   const en = await ended;
   ok('rəqib çıxanda matç bitir (texniki qələbə)', en?.win === 'A');
+
+  // --- 8b2. Futbol: başlanğıc vuruşu ---
+  {
+    await sleep(300);
+    const koF = A.c.waitT('kickoff', 9000, (m) => m.id === 'football' && m.side);
+    A.c.send({ t: 'match', act: 'join', id: 'football', team: 'A', mode: 1 });
+    await sleep(200);
+    B.c.send({ t: 'match', act: 'join', id: 'football', team: 'B', mode: 1 });
+    const early = A.c.waitT('balls', 900, (m) => { const r = m.b.find((x) => x[0] === 'football'); return r && Math.hypot(r[4], r[6]) > 1; });
+    await sleep(300);
+    A.c.send({ t: 'kick', id: 'football', v: [0, 2, 10] });
+    B.c.send({ t: 'kick', id: 'football', v: [0, 2, -10] });
+    ok('geri sayımda topa toxunmaq olmur', !(await early));
+    const kf = await koF;
+    ok('futbolda ilk vuruşu püşklə seçilən komanda edir', kf?.side === 'A' || kf?.side === 'B', kf?.side);
+    const [kick, wait] = kf?.side === 'B' ? [B, A] : [A, B];
+    const rej = wait.c.waitT('sys', 1500, (m) => /rəqib/.test(m.msg));
+    wait.c.send({ t: 'kick', id: 'football', v: [0, 1, 8] });
+    ok('başlanğıc vuruşunu rəqib komanda edə bilməz', !!(await rej));
+    const cleared = A.c.waitT('kickoff', 1500, (m) => m.ball === 'football' && !m.side);
+    kick.c.send({ t: 'kick', id: 'football', v: [3, 1, 0] });
+    ok('başlanğıc vuruşu edildikdən sonra hamı oynaya bilər', !!(await cleared));
+    const endF = A.c.waitT('mend', 2500, (m) => m.id === 'football');
+    B.c.send({ t: 'match', act: 'leave', id: 'football' });
+    await endF;
+  }
 
   // --- 8c. C# imtahanı (kopya missiyası): lobbi, 3 nəfər, başlanğıc, cavablar, kopya, çıxış ---
   {

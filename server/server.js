@@ -323,7 +323,10 @@ const BALL_G = 12;
 const balls = (CAMPUS.balls || []).map((b) => ({ ...b, px: b.x, py: b.r, pz: b.z, vx: 0, vy: 0, vz: 0, lastKick: null, resetAt: 0, hold: false, serve: null, dirty: true }));
 const ballState = () => ({ t: 'balls', b: balls.map((b) => [b.id, ...[b.px, b.py, b.pz, b.vx, b.vy, b.vz].map((v) => +v.toFixed(3)), b.hold ? 1 : 0]) });
 
-function stepBall(b, dt) {
+// Qapı çərçivəsi, oyunçu bədəni və qol xətti — klientlə ortaq fayl (public/js/ballphys.js)
+const { goalFrame, bodyHits, goalCrossed, substeps } = require(path.join(PUBLIC, 'js', 'ballphys.js'));
+
+function stepBall(b, dt, bodies = []) {
   if (b.hold) return; // voleybolda servis gözləyir — havada dayanır
   const prev = { x: b.px, y: b.py, z: b.pz };
   // sabit cazibə üçün dəqiq inteqrasiya: mövqe orta sürətlə dəyişir
@@ -345,10 +348,12 @@ function stepBall(b, dt) {
     const f = Math.max(0, 1 - (b.kind === 'basketball' ? 1.6 : 1.1) * dt);
     b.vx *= f; b.vz *= f;
   }
-  // qol: top qapının ağzından xətti keçir
+  // qapı çərçivəsi və oyunçuların bədəni
+  for (const g of b.goals || []) goalFrame(b, prev, g, Math.sign(g.z - b.z), b.r);
+  if (bodies.length) bodyHits(b, prev, bodies, b.r);
+  // qol: top qapının ağzından xətti YALNIZ meydança tərəfindən içəri keçir (arxadan keçən top qol deyil)
   for (const g of b.goals || []) {
-    const crossed = (prev.z - g.z) * (b.pz - g.z) < 0;
-    if (crossed && Math.abs(b.px - g.x) < g.half - b.r && b.py < g.h && !b.resetAt) score(b, 'goal', b.goals.indexOf(g));
+    if (!b.resetAt && goalCrossed(b, prev, g, Math.sign(g.z - b.z), b.r)) score(b, 'goal', b.goals.indexOf(g));
   }
   // səbət: top halqanın içindən aşağı düşür
   const h = b.hoop;
@@ -392,21 +397,58 @@ setInterval(() => {
     if (b.resetAt && now > b.resetAt) {
       const sv = b.serve; // matçda voleybol: növbəti servisi vuran komandanın tərəfində havada dayanır
       Object.assign(b, { px: sv ? sv.x : b.x, py: sv ? 1.9 : b.r + 0.5, pz: sv ? sv.z : b.z, vx: 0, vy: 0, vz: 0, resetAt: 0, hold: !!sv, serve: null, dirty: true });
+      // qol/səbətdən sonra topu qol buraxan komanda başlayır
+      const mt = b.kickoffSide && matchForBall(b);
+      if (mt) startKickoff(mt, b, b.kickoffSide);
+      b.kickoffSide = null;
+    }
+    if (b.kickoff && now > b.kickoff.until) clearKickoff(b);
+    // topa dəyə bilən bədənlər: matç gedirsə yalnız matç oyunçuları, yoxsa hamı (NPC-lər də)
+    const mt = matches.find((x) => (x.state === 'play' || x.state === 'count') && x.cfg.ball === b.id);
+    const bd = b.bounds;
+    const bodies = [];
+    for (const e of entities.values()) {
+      if (e.dead || e.x < bd.minX - 1 || e.x > bd.maxX + 1 || e.z < bd.minZ - 1 || e.z > bd.maxZ + 1) continue;
+      if (mt && !teamOf(mt, e.key)) continue;
+      if (e.key === b.lastKick && now - (b.kickAt || 0) < 300) continue; // vuran oyunçunun öz içindən çıxsın
+      bodies.push(e);
     }
     // futbol: üstündən qaçan oyunçu topu qabağına itələyir (dribl)
     if (b.kind === 'football' && b.py < 0.7) {
-      for (const e of entities.values()) {
-        if (!e.online || e.dead || !e.moving || !canTouchBall(e.key, b)) continue;
+      for (const e of bodies) {
+        if (!e.online || !e.moving || !canTouchBall(e.key, b)) continue;
         const dx = b.px - e.x, dz = b.pz - e.z, d = Math.hypot(dx, dz);
         if (d < 0.75 && d > 0.01) {
           const sp = Math.hypot(b.vx, b.vz);
-          if (sp < 5.5) { b.vx += (dx / d) * 3.2; b.vz += (dz / d) * 3.2; b.lastKick = e.key; }
+          if (sp < 5.5) { b.vx += (dx / d) * 3.2; b.vz += (dz / d) * 3.2; b.lastKick = e.key; if (b.kickoff) clearKickoff(b); }
         }
       }
     }
-    stepBall(b, dt);
+    // sürətli top bir addımda dirəyi/oyunçunu "atlamasın" — kiçik addımlara bölünür
+    const n = substeps(b, dt);
+    for (let i = 0; i < n; i++) stepBall(b, dt / n, bodies);
   }
 }, 1000 / 30);
+
+/** Başlanğıc vuruşu: topa əvvəlcə yalnız bu komanda toxuna bilər (8 san və ya ilk toxunuşa qədər) */
+function startKickoff(mt, b, side) {
+  b.kickoff = { side, until: Date.now() + 8000 };
+  if (b.kind === 'football') {
+    // komandalar öz yarılarına, başlayan komandanın ilk oyunçusu topun yanına
+    placeTeams(mt);
+    const k = mt[side][0], e = entities.get(k);
+    if (e && !e.dead) {
+      e.x = b.x; e.z = b.z + (side === 'A' ? -1.1 : 1.1);
+      const ws = sockets.get(k);
+      if (ws) { ws.lastPosAt = Date.now(); send(ws, { t: 'correct', x: e.x, y: 0, z: e.z }); }
+    }
+  }
+  broadcast({ t: 'kickoff', id: mt.cfg.id, ball: b.id, side });
+}
+function clearKickoff(b) {
+  b.kickoff = null;
+  broadcast({ t: 'kickoff', ball: b.id, side: null });
+}
 
 // ---------- Matçlar: futbol / basketbol / voleybol — 1v1 və 2v2 ----------
 // Vəziyyətlər: idle → wait (komandalar yığılır) → count (5 san geri sayım) → play → end (6 san nəticə) → idle
@@ -420,7 +462,12 @@ function matchForBall(b) { return matches.find((mt) => mt.state === 'play' && mt
 /** Matç gedəndə topa yalnız həmin matçın oyunçuları toxuna bilər */
 function canTouchBall(key, b) {
   const mt = matches.find((x) => (x.state === 'play' || x.state === 'count') && x.cfg.ball === b.id);
-  return !mt || !!teamOf(mt, key);
+  if (!mt) return true;
+  const side = teamOf(mt, key);
+  if (!side || mt.state === 'count') return false; // geri sayımda heç kim
+  // başlanğıc vuruşu: qol buraxan komanda başlayır
+  if (b.kickoff && mt.state === 'play' && Date.now() < b.kickoff.until && side !== b.kickoff.side) return false;
+  return true;
 }
 function matchState() {
   const now = Date.now();
@@ -460,7 +507,7 @@ function resetMatchBall(mt, serveSide) {
     const s = serveSpot(b, serveSide);
     Object.assign(b, { px: s.x, py: 1.9, pz: s.z, hold: true });
   } else Object.assign(b, { px: b.x, py: b.r + 0.5, pz: b.z, hold: false });
-  Object.assign(b, { vx: 0, vy: 0, vz: 0, resetAt: 0, serve: null, lastKick: null, dirty: true });
+  Object.assign(b, { vx: 0, vy: 0, vz: 0, resetAt: 0, serve: null, lastKick: null, kickoff: null, kickoffSide: null, dirty: true });
 }
 function joinMatch(ws, id, team, mode) {
   const mt = matchById(id), key = ws.key;
@@ -511,6 +558,7 @@ function matchScore(mt, b, kind, goalIdx) {
     if (acc && side) { acc.baskets = (acc.baskets || 0) + 1; addXp(b.lastKick, 6); }
   }
   if (!side) return;
+  if (kind === 'goal' || kind === 'basket') b.kickoffSide = side === 'A' ? 'B' : 'A'; // qol buraxan başlayır
   mt.score[side]++;
   broadcast({ t: 'mscore', id: mt.cfg.id, side, by: acc && teamOf(mt, b.lastKick) === side ? acc.name : '', kind, score: mt.score });
   if (mt.score[side] >= mt.cfg.target) endMatch(mt, side);
@@ -527,7 +575,8 @@ function volleyLanded(b) {
   const loser = inside ? landSide : hitter || landSide;
   const winner = loser === 'A' ? 'B' : 'A';
   b.resetAt = Date.now() + 1800;
-  b.serve = serveSpot(b, winner); // xalı qazanan servis vurur
+  b.serve = serveSpot(b, winner); // xalı qazanan servis vurur (voleybol qaydası)
+  b.kickoffSide = winner; // servisi yalnız o komanda vura bilər
   matchScore(mt, b, winner, -1);
 }
 function endMatch(mt, win, reason = '') {
@@ -545,7 +594,7 @@ function endMatch(mt, win, reason = '') {
   broadcast({ t: 'mend', id: mt.cfg.id, win, names: win ? mt[win].map(nameOf) : [], score: mt.score, kA: mt.A, kB: mt.B });
   Object.assign(mt, { state: 'end', endAt: Date.now() + 6000, win });
   const b = ballOf(mt);
-  if (b) Object.assign(b, { serve: null, hold: false, resetAt: Date.now() + 2500, dirty: true });
+  if (b) { Object.assign(b, { serve: null, hold: false, resetAt: Date.now() + 2500, kickoffSide: null, dirty: true }); if (b.kickoff) clearKickoff(b); }
   scheduleSave();
 }
 setInterval(() => {
@@ -554,7 +603,11 @@ setInterval(() => {
   for (const mt of matches) {
     if (mt.state === 'count' && now >= mt.startAt) {
       Object.assign(mt, { state: 'play', endsAt: now + mt.cfg.time * 1000, score: { A: 0, B: 0 } });
-      resetMatchBall(mt, 'A');
+      // ilk vuruş / servis: püşk
+      const ks = Math.random() < 0.5 ? 'A' : 'B';
+      resetMatchBall(mt, ks);
+      const mb = ballOf(mt);
+      if (mb) startKickoff(mt, mb, ks);
       broadcast({ t: 'mstart', id: mt.cfg.id });
       changed = true;
     } else if (mt.state === 'play' && now >= mt.endsAt) {
@@ -1169,7 +1222,10 @@ wss.on('connection', (ws, req) => {
       const b = balls.find((x) => x.id === m.id);
       const now = Date.now();
       if (!e || e.dead || !b || b.resetAt || now - (ws.lastKick || 0) < 350) return;
-      if (!canTouchBall(e.key, b)) return send(ws, { t: 'sys', msg: '⛔ Burada matç gedir — topa yalnız oyunçular toxuna bilər.' });
+      if (!canTouchBall(e.key, b)) {
+        const ko = b.kickoff && matchForBall(b);
+        return send(ws, { t: 'sys', msg: ko && teamOf(ko, e.key) ? '⏳ Başlanğıc vuruşunu rəqib edir — gözlə.' : '⛔ Burada matç gedir — topa yalnız oyunçular toxuna bilər.' });
+      }
       const vb = b.kind === 'volleyball';
       if (Math.hypot(b.px - e.x, b.pz - e.z) > (vb ? 2.8 : 2.3) || Math.abs(b.py - (e.y + 0.9)) > (vb ? 2.8 : 2.4)) return;
       let v = vec3(m.v);
@@ -1181,6 +1237,8 @@ wss.on('connection', (ws, req) => {
       b.hold = false;
       if (b.py < b.r + 0.05) b.py = b.r + 0.05;
       b.lastKick = e.key;
+      b.kickAt = now;
+      if (b.kickoff) clearKickoff(b);
       e.emote = 0;
       broadcast(ballState());
       broadcast({ t: 'kickFx', id: e.key, ball: b.id }, ws);

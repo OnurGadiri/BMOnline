@@ -83,6 +83,9 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 - **Benches:** walk up to any bench and press **F** to sit (others see you sitting); move to stand up.
 - **Football:** a shared, server-simulated ball on the pitch. Run into it to dribble; hold **F** to charge
   a kick and release to shoot in the direction you are looking. Goals are announced to everyone (+15 XP).
+  The goals have posts, a crossbar and a net (back, sides and roof): a ball can only score by crossing the goal
+  line from the pitch side, and it bounces off posts, nets and players' bodies instead of passing through them.
+  Ball physics shared by the server and the client lives in `public/js/ballphys.js`.
 - **Basketball:** hold **F** next to the ball on the volleyball court and release in the middle of the
   power bar to shoot at the hoop on the wall (+10 XP per basket).
 - **Kapital Bank Room — C# exam cheating mission (multiplayer):** press **F** at the middle door of the
@@ -106,7 +109,9 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 - **Matches (1v1 / 2v2):** inside the football pitch or the volleyball/basketball court, press **F**
   (or the 🏟 Matç button) to open the match panel, pick 1v1 or 2v2 and join the blue or red team. When
   both teams are full the match starts after a 5-second countdown, players are moved to their side and
-  only match players can touch the ball. Football: first to 3 goals (3 min); basketball: first to 5
+  only match players can touch the ball (nobody during the countdown). The first kick-off / serve is drawn
+  by lot; after a goal or basket the team that conceded kicks off (only they can touch the ball until their first
+  touch or for 8 s), in volleyball the team that won the point serves. Football: first to 3 goals (3 min); basketball: first to 5
   baskets (2.5 min); volleyball: first to 7 points (4 min) — the ball landing in a side's court is a
   point for the other side, out of bounds is a point against the hitter. Winners get +40 XP and a win
   on the leaderboard (🏆); leaving a running match forfeits it.
@@ -164,7 +169,7 @@ Touch controls appear automatically on phones and tablets (landscape is recommen
 ## Tests
 
 ```bash
-npm test          # map validation + server protocol tests
+npm test          # map validation + ball physics + server protocol tests
 npm run test:map  # only the campus.json checks
 ```
 
