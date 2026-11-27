@@ -359,6 +359,9 @@ async function enter(name, pin = '1234') {
     const [sa, sb, sg] = await Promise.all([A, B, G].map((P) => P.c.waitT('xstart', 9000)));
     ok('imtahan avtomatik başlayır (hamıya suallar gəlir)', !!(sa && sb && sg) && sa.qs.length === 5 && sa.npcs.length > 0, sa ? `${sa.qs.length} sual, ${sa.npcs.length} NPC` : '');
     ok('hər tələbəyə ayrı yer verilir', !!sa && new Set([sa.seat, sb?.seat, sg?.seat]).size === 3);
+    const noFight = A.c.waitT('combatOff', 1500);
+    A.c.send({ t: 'punch' });
+    ok('imtahan otağında döyüşmək olmur', (await noFight)?.why === 'room');
     // telefona bax (öz yerində)
     const rev = A.c.waitT('xreveal', 6500);
     A.c.send({ t: 'xpeek', on: true });
@@ -409,6 +412,113 @@ async function enter(name, pin = '1234') {
     D.c.send({ t: 'tp', id: 'yoxdur' });
     ok('olmayan nöqtəyə teleport olmur', !(await bad));
     D.c.close();
+  }
+
+  // --- 8e. 🛡 Təhlükəsiz rejim və oyun zamanı qoruma ---
+  {
+    // bir IP-dən saatda 5 hesab yaradılır — əvvəlki bölmələrin hesablarından istifadə edirik (oflayn NPC-lər idi)
+    let S = await enter('Gamma');
+    const T = await enter('Epsilon');
+    const Y = await enter('Delta');
+    // hamını meydana gətir (teleport gözləməsi varsa, gözlə)
+    const toPlaza = async (P) => {
+      for (let i = 0; i < 3; i++) {
+        const c = P.c.waitT('correct', 2000), er = P.c.waitT('tpErr', 2000);
+        P.c.send({ t: 'tp', id: 'plaza' });
+        const got = await Promise.race([c, er]);
+        if (got?.t === 'correct') { P.c.pos = { x: got.x, z: got.z }; return; }
+        await sleep(10500);
+      }
+    };
+    await Promise.all([S, T, Y].map(toPlaza));
+    await sleep(3300); // giriş qoruması bitsin
+    // bir xətt üzrə: T (Epsilon) — S (Gamma) — Y (Delta), 6 m aralı
+    const p0 = { x: S.c.pos.x, z: S.c.pos.z - 4 };
+    [S.c.pos, T.c.pos, Y.c.pos] = await Promise.all([
+      S.c.walkTo(S.c.pos, p0, 8.5), T.c.walkTo(T.c.pos, { x: p0.x - 6, z: p0.z }, 8.5), Y.c.walkTo(Y.c.pos, { x: p0.x + 6, z: p0.z }, 8.5)]);
+    await sleep(200);
+    const eyeT = [T.c.pos.x, 1.45, T.c.pos.z];
+    const shootAt = (P, from, to) => P.c.send({ t: 'shoot', o: from, d: [to.x - from[0], 1.2 - from[1], to.z - from[2]] });
+    const h0 = T.c.waitT('hit', 1500);
+    shootAt(T, eyeT, S.c.pos);
+    ok('təhlükəsiz rejim bağlı olanda oyunçu vurulur', (await h0)?.id === 'gamma');
+    // döyüşdən qaçmaq üçün rejimi açmaq olmur
+    const r1 = S.c.waitT('safe', 1500);
+    S.c.send({ t: 'safe', on: true });
+    ok('zərər alan oyunçu 6 san ərzində təhlükəsiz rejimi aça bilmir', /Döyüşdəsən/.test((await r1)?.err || ''));
+    const r2 = T.c.waitT('safe', 1500);
+    T.c.send({ t: 'safe', on: true });
+    ok('vuran oyunçu da 6 san ərzində rejimi aça bilmir', /vurmusan/.test((await r2)?.err || ''));
+    await sleep(6200);
+    const seen = T.c.waitT('entity', 2000, (m) => m.e.id === 'gamma' && m.e.safe === true);
+    const r3 = S.c.waitT('safe', 1500);
+    S.c.send({ t: 'safe', on: true });
+    ok('6 san sonra təhlükəsiz rejim açılır', (await r3)?.on === true && !(await r3).err);
+    ok('başqaları onun təhlükəsiz rejimdə olduğunu görür', !!(await seen));
+    // S-i vurmaq olmur — güllə içindən keçib arxadakı Y-ə dəyir
+    // (can bərpası da hp göndərir — yalnız azalma zərər deməkdir)
+    const hpBefore = [...S.c.msgs].reverse().find((m) => m.t === 'hp' && m.id === 'gamma')?.hp ?? 100;
+    const sHp = S.c.waitT('hp', 900, (m) => m.id === 'gamma' && m.hp < hpBefore);
+    const h1 = T.c.waitT('hit', 1500);
+    shootAt(T, eyeT, Y.c.pos);
+    const hh = await h1;
+    ok('təhlükəsiz rejimdəki oyunçuya güllə dəymir (içindən keçir)', !(await sHp) && hh?.id === 'delta', hh?.id);
+    T.c.pos = await T.c.walkTo(T.c.pos, { x: S.c.pos.x - 1.2, z: S.c.pos.z }, 8.5);
+    T.c.send({ t: 'pos', x: T.c.pos.x, y: 0, z: T.c.pos.z, ry: Math.PI / 2, m: 0, e: 0, w: 0 });
+    await sleep(500);
+    const ph = T.c.waitT('hit', 900);
+    T.c.send({ t: 'punch' });
+    ok('təhlükəsiz rejimdəki oyunçuya yumruq dəymir', !(await ph));
+    // S özü də heç kimi vura bilmir, silah tuta bilmir
+    const off1 = S.c.waitT('combatOff', 1500);
+    const sh1 = S.c.waitT('hit', 900);
+    shootAt(S, [S.c.pos.x, 1.45, S.c.pos.z], T.c.pos);
+    ok('təhlükəsiz rejimdə atəş açmaq olmur', (await off1)?.why === 'safe' && !(await sh1));
+    await sleep(500);
+    const off2 = S.c.waitT('combatOff', 1500);
+    S.c.send({ t: 'pos', x: S.c.pos.x, y: 0, z: S.c.pos.z, ry: -Math.PI / 2, m: 0, e: 0, w: 1 });
+    S.c.send({ t: 'punch' });
+    ok('təhlükəsiz rejimdə yumruq vurmaq olmur', (await off2)?.why === 'safe');
+    const sn = await T.c.waitT('snap', 1500, (m) => m.e.some((r) => r[0] === 'gamma'));
+    ok('təhlükəsiz rejimdə əldə silah görünmür', sn?.e.find((r) => r[0] === 'gamma')?.[7] === 0);
+    const r4 = S.c.waitT('safe', 1500);
+    S.c.send({ t: 'safe', on: false });
+    ok('rejimi tez-tez dəyişmək olmur (10 san)', /tez-tez/.test((await r4)?.err || ''));
+    // rejim hesabda saxlanır: çıxanda NPC-si də qorunur, yenidən girəndə açıq qalır
+    const offNpc = T.c.waitT('entity', 3000, (m) => m.e.id === 'gamma' && m.e.online === false);
+    S.c.close();
+    ok('çıxan oyunçunun NPC-si də qorunur', (await offNpc)?.e.safe === true);
+    S = await enter('Gamma');
+    ok('təhlükəsiz rejim yenidən girəndə də açıq qalır', S.wel.you.safe === true);
+    // döyüşdə (zərər aldıqdan dərhal sonra) matça qoşulub qorunmağa qaçmaq olmur — Y indicə vuruldu
+    const noJoin = Y.c.waitT('sys', 1500, (m) => /Döyüşdəsən/.test(m.msg));
+    Y.c.send({ t: 'match', act: 'join', id: 'football', team: 'B', mode: 1 });
+    ok('döyüşdə matça qoşulmaq olmur', !!(await noJoin));
+    await sleep(6200);
+    // matç: oyunçuları nə vurmaq olar, nə də onlar vura bilər
+    const corT = T.c.waitT('correct', 2500);
+    T.c.send({ t: 'match', act: 'join', id: 'football', team: 'A', mode: 1 });
+    await sleep(150);
+    Y.c.send({ t: 'match', act: 'join', id: 'football', team: 'B', mode: 1 });
+    const ct = await corT;
+    if (ct) T.c.pos = { x: ct.x, z: ct.z };
+    const r5 = S.c.waitT('safe', 1500);
+    S.c.send({ t: 'safe', on: false });
+    ok('10 san sonra təhlükəsiz rejim söndürülür', (await r5)?.on === false && !(await r5).err);
+    S.c.pos = await S.c.walkTo(S.c.pos, { x: T.c.pos.x, z: T.c.pos.z - 6 }, 8.5);
+    await sleep(200);
+    const offM = T.c.waitT('combatOff', 1500);
+    shootAt(T, [T.c.pos.x, 1.45, T.c.pos.z], S.c.pos);
+    ok('matçda olan oyunçu vura bilmir', (await offM)?.why === 'match');
+    const tHp = T.c.waitT('hp', 900, (m) => m.id === 'epsilon');
+    const sh2 = S.c.waitT('hit', 900);
+    shootAt(S, [S.c.pos.x, 1.45, S.c.pos.z], T.c.pos);
+    ok('matçda olan oyunçunu vurmaq olmur', !(await sh2) && !(await tHp));
+    const endM = T.c.waitT('mend', 2500, (m) => m.id === 'football');
+    Y.c.send({ t: 'match', act: 'leave', id: 'football' });
+    await endM;
+    S.c.close(); T.c.close(); Y.c.close();
+    await sleep(300);
   }
 
   // --- 9. Eyni hesabla ikinci giriş, çıxış → NPC ---

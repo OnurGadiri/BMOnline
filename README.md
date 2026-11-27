@@ -78,6 +78,14 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 - Effects: tracers, muzzle flash, impact sparks, floating damage numbers, hit markers,
   damage vignette, overhead health bars and synthesized sound effects (no audio files needed).
 - Tuning values live in the `W` object in `server/server.js`.
+- **🛡 Safe mode** (**B**, the button under the weapon panel, or 🛡 on mobile): while it is on you have no weapon,
+  you cannot hit anyone (players or NPCs) and nobody can hit you — bullets pass through you, so you cannot shield others.
+  It is saved with your account, so your offline NPC is protected too, and other players see 🛡 on your name tag.
+  To stop it being used to escape a fight, it can only be turned on after 6 seconds without taking damage or attacking,
+  and it can be switched at most every 10 seconds.
+- **No fighting during games:** players in a running match (including the countdown) and everyone in the exam classroom
+  can neither be hit nor attack. You cannot join a match or an exam within 6 seconds of taking damage.
+- All of these rules are enforced by the server; the client only mirrors them.
 
 ### Activities
 - **Benches:** walk up to any bench and press **F** to sit (others see you sitting); move to stand up.
@@ -146,6 +154,8 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 | `Q` / `E` | Rotate camera |
 | Mouse wheel | Zoom |
 | `G` | Switch between fists and pistol |
+| `B` | Safe mode on / off (no weapon, nobody can hit you) |
+| `T` | Fast travel |
 | Left click | Punch / shoot |
 | `R` | Reload |
 | `1` `2` `3` | Emotes: wave, dance, cheer |
@@ -182,7 +192,7 @@ npm run test:map  # only the campus.json checks
 - `tests/ball.test.js` checks the shared ball physics (`public/js/ballphys.js`): goals, goal nets and posts,
   players' bodies, the basketball rim, backboard and shot accuracy, and ball-to-ball collisions.
 - `tests/protocol.test.js` starts its own server on port 3101 with a temporary data folder
-  (your `data/players.json` is never touched) and runs 79 multiplayer checks: login and
+  (your `data/players.json` is never touched) and runs 97 multiplayer checks: login and
   character validation, sync, chat, teleport guard, shooting, ammo, death and respawn,
   punching, the gallows, brute-force protection and session takeover.
 

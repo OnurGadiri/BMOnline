@@ -140,6 +140,7 @@ function togglePhotoMode() {
   }
 }
 $('btn-settings').onclick = () => { $('settings').hidden = !$('settings').hidden; };
+$('btn-safe').onclick = (ev) => { ev.currentTarget.blur(); toggleSafe(); };
 
 // ---------- Şəbəkə ----------
 let ws = null;
@@ -223,6 +224,17 @@ function handle(m) {
     // ---- interaksiyalar ----
     case 'balls':
       play?.setBalls(m.b);
+      break;
+    case 'safe':
+      if (m.err) toast(m.err);
+      else if (!!m.on !== !!player.safe) toast(m.on ? '🛡 Təhlükəsiz rejim AÇIQDIR — səni heç kim vura bilməz, sən də heç kimi vura bilməzsən.' : '⚔ Təhlükəsiz rejim söndürüldü — artıq vurula bilərsən.');
+      player.safe = !!m.on;
+      if (player.safe && player.weapon) setWeapon(0);
+      updateCombatHud();
+      break;
+    case 'combatOff':
+      if (player.weapon) setWeapon(0);
+      shieldToast(m.why);
       break;
     case 'tpOk':
       toggleTeleport(false);
@@ -390,8 +402,41 @@ function attachGun(holder, on) {
     holder.gunMesh = null;
   }
 }
+// ---------- 🛡 Qoruma: təhlükəsiz rejim, matç, imtahan otağı (server də eyni qaydanı yoxlayır) ----------
+const SHIELD_TEXT = {
+  safe: { name: 'Təhlükəsiz rejim', msg: '🛡 Təhlükəsiz rejimdəsən — silah yoxdur (B ilə söndür).' },
+  match: { name: 'Matç — döyüş yoxdur', msg: '⚽ Matç gedir — matç vaxtı döyüşmək olmur.' },
+  room: { name: 'İmtahan — döyüş yoxdur', msg: '📝 İmtahan otağında döyüşmək olmur.' },
+};
+/** Mən qorunuram? 'safe' | 'match' | 'room' | null */
+function myShield() {
+  if (player.safe) return 'safe';
+  if (activeMyMatch()) return 'match';
+  if (roomHere()) return 'room';
+  return null;
+}
+/** Başqa oyunçu qorunur? (vurmaq olmaz, güllə içindən keçir) */
+function otherShielded(id, o) {
+  if (o.safe) return true;
+  if (matchList.some((m) => (m.state === 'play' || m.state === 'count') && (m.kA.includes(id) || m.kB.includes(id)))) return true;
+  const p = o.char?.root.position;
+  return !!p && rooms.some((r) => { const b = r.bounds; return p.x > b.minX - 1 && p.x < b.maxX + 1 && p.z > b.minZ - 1 && p.z < b.maxZ + 1; });
+}
+let shieldToastAt = 0;
+function shieldToast(why) {
+  const now = performance.now();
+  if (now - shieldToastAt < 1500) return;
+  shieldToastAt = now;
+  toast(SHIELD_TEXT[why]?.msg || SHIELD_TEXT.safe.msg);
+}
+function toggleSafe() {
+  if (state.mode !== 'game' || player.dead) return;
+  send({ t: 'safe', on: !player.safe });
+}
 function setWeapon(w) {
   if (player.dead) return;
+  const sh = w === 1 && myShield();
+  if (sh) { shieldToast(sh); return; }
   player.weapon = w;
   player.emote = 0;
   attachGun(player, w === 1);
@@ -407,6 +452,8 @@ function reload() {
 function attack() {
   if (state.mode !== 'game' || player.dead || gallows.open) return;
   sfx.init();
+  const sh = myShield();
+  if (sh) { shieldToast(sh); return; }
   const now = performance.now();
   if (player.weapon === 0) {
     if (now - player.lastPunch < 450) return;
@@ -423,7 +470,8 @@ function attack() {
   if (player.ammo <= 0) { sfx.empty(); reload(); return; }
   player.lastShot = now;
   player.ammo--;
-  const aim = aimPoint(camera, world, others);
+  // qorunan oyunçular hədəf deyil — güllə onların içindən keçir (server də belə hesablayır)
+  const aim = aimPoint(camera, world, { values: () => [...others].filter(([id, o]) => !otherShielded(id, o)).map(([, o]) => o) });
   const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
   const origin = player.pos.clone().add(new THREE.Vector3(0, 1.45, 0)).addScaledVector(right, 0.3);
   const dir = aim.clone().sub(origin).normalize();
@@ -451,12 +499,16 @@ function updateCombatHud() {
   $('hud-hp').style.width = `${hp}%`;
   $('hud-hp').style.background = hp > 50 ? '' : hp > 25 ? '#ffcc00' : '#ff3b30';
   $('hud-hp-text').textContent = `❤ ${hp}`;
-  $('w-icon').textContent = player.weapon === 1 ? '🔫' : '👊';
+  const sh = myShield();
+  $('w-icon').textContent = sh ? '🛡' : player.weapon === 1 ? '🔫' : '👊';
   const ta = document.getElementById('tbtn-attack');
-  if (ta) ta.textContent = player.weapon === 1 ? '🔫' : '👊';
-  $('w-name').textContent = player.weapon === 1 ? 'Tapança' : 'Yumruq';
-  $('w-ammo').textContent = player.weapon === 1 ? (player.reloading ? 'doldurulur…' : `${player.ammo} / ${MAG}`) : '';
-  document.body.classList.toggle('aiming', player.weapon === 1 && !player.dead);
+  if (ta) ta.textContent = sh ? '🛡' : player.weapon === 1 ? '🔫' : '👊';
+  $('w-name').textContent = sh ? SHIELD_TEXT[sh].name : player.weapon === 1 ? 'Tapança' : 'Yumruq';
+  $('w-ammo').textContent = !sh && player.weapon === 1 ? (player.reloading ? 'doldurulur…' : `${player.ammo} / ${MAG}`) : '';
+  document.body.classList.toggle('aiming', player.weapon === 1 && !player.dead && !sh);
+  document.body.classList.toggle('shielded', !!sh);
+  const bs = document.getElementById('btn-safe');
+  if (bs) { bs.textContent = player.safe ? '🛡 Təhlükəsiz rejim: AÇIQ (B)' : '🛡 Təhlükəsiz rejim: bağlı (B)'; bs.classList.toggle('on', !!player.safe); }
 }
 
 // ---------- Dar ağacı və çarmıx (yalnız uydurma məhkum NPC-lər) ----------
@@ -623,6 +675,7 @@ function enterGame(m) {
   player.ry = m.you.ry;
   player.hp = m.you.hp ?? 100;
   player.dead = false;
+  player.safe = !!m.you.safe;
   cam.yaw = player.ry + Math.PI;
   setPlayerModel(state.appearance);
   updateCombatHud();
@@ -705,10 +758,11 @@ function upsertEntity(e) {
   o.online = e.online;
   o.name = e.name;
   o.level = e.level;
-  const tagKey = `${e.name}|${e.level}|${e.online}`;
+  o.safe = !!e.safe;
+  const tagKey = `${e.name}|${e.level}|${e.online}|${o.safe}`;
   if (o.tagKey !== tagKey) {
     if (o.tag) o.char.root.remove(o.tag);
-    o.tag = makeNameTag(e.name, `Lv ${e.level}${e.online ? '' : ' · oflayn'}`, e.online ? '#ffffff' : '#b0b0b0');
+    o.tag = makeNameTag(e.name, `${o.safe ? '🛡 ' : ''}Lv ${e.level}${e.online ? '' : ' · oflayn'}`, e.online ? '#ffffff' : '#b0b0b0');
     o.tag.position.y = o.char.height + 0.35;
     o.char.root.add(o.tag);
     o.tagKey = tagKey;
@@ -759,6 +813,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH') { setHelpHidden(!settings.hideHelp); return; }
   if (e.code === 'KeyU') { setMinimal(!document.body.classList.contains('minimal-ui')); return; }
   if (e.code === 'KeyT') { toggleTeleport(); return; }
+  if (e.code === 'KeyB') { if (!e.repeat) toggleSafe(); return; }
   if (e.code === 'Space') e.preventDefault();
   keys.add(e.code);
 });
@@ -1501,6 +1556,8 @@ function frame(dt) {
   updateMatchHud();
   exam?.update(dt);
   { const inRoom = !!roomHere(); if (inRoom !== frame.inRoom) { frame.inRoom = inRoom; document.body.classList.toggle('in-room', inRoom); } }
+  // qorunma dəyişəndə (matç başladı, otağa girdi...) silahı yığ və HUD-u yenilə
+  { const sh = state.mode === 'game' ? myShield() : null; if (sh !== frame.shield) { frame.shield = sh; if (sh && player.weapon) setWeapon(0); updateCombatHud(); } }
   updateCamera(dt);
   world.update(clock.elapsedTime, dt, camera);
   updateBirds?.(clock.elapsedTime, dt);

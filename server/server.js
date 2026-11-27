@@ -103,7 +103,7 @@ const sockets = new Map(); // accountKey -> ws
 
 function publicEntity(e) {
   return { id: e.key, name: e.name, appearance: e.appearance, online: e.online, level: db.accounts[e.key].level,
-    x: e.x, y: e.y, z: e.z, ry: e.ry, hp: Math.round(e.hp), dead: !!e.dead };
+    x: e.x, y: e.y, z: e.z, ry: e.ry, hp: Math.round(e.hp), dead: !!e.dead, safe: !!db.accounts[e.key].safe };
 }
 
 /** XP əlavə edir, lazım olsa level qaldırır və oyunçuya bildirir */
@@ -233,6 +233,25 @@ const W = {
 const RESPAWN_PLAYER = 6000, RESPAWN_NPC = 12000, PROTECT = 3000;
 const REGEN_DELAY = 5000, REGEN_RATE = 8; // can/san
 
+// Qoruma: 🛡 təhlükəsiz rejim (oyunçunun seçimi, hesabda saxlanır — oflayn NPC-si də qorunur),
+// matç (oyun və geri sayım) və imtahan otağı. Qorunan nə vura bilər, nə də onu vurmaq olar; güllə içindən keçir.
+const SAFE_COMBAT = 6000, SAFE_TOGGLE = 10000;
+function shield(e) {
+  if (!e) return null;
+  if (db.accounts[e.key]?.safe) return 'safe';
+  if (matches.some((mt) => (mt.state === 'play' || mt.state === 'count') && teamOf(mt, e.key))) return 'match';
+  if (roomAt(e.x, e.z)) return 'room';
+  return null;
+}
+/** son 6 saniyədə zərər alıb — döyüşdən qaçmaq üçün qorunan yerə (matç, imtahan, təhlükəsiz rejim) keçmək olmaz */
+const inCombat = (e) => !!e && Date.now() - (e.lastHit || 0) < SAFE_COMBAT;
+const COMBAT_MSG = '⚔ Döyüşdəsən — 6 saniyə zərər almadan gözlə.';
+const SHIELD_MSG = {
+  safe: '🛡 Təhlükəsiz rejimdəsən — vurmaq olmur (B ilə söndür).',
+  match: '⚽ Matç gedir — matç vaxtı döyüşmək olmur.',
+  room: '📝 İmtahan otağında döyüşmək olmur.',
+};
+
 const charHeight = (e) => 1.9 * (e.appearance?.height || 1);
 
 /** Şüa ilə 3D qutunun kəsişməsi (slab üsulu) — ən yaxın t və ya Infinity */
@@ -259,7 +278,7 @@ function raycastWorld(o, d) {
 function raycastEntities(o, d, maxT, skipKey) {
   let best = null;
   for (const e of entities.values()) {
-    if (e.key === skipKey || e.dead) continue;
+    if (e.key === skipKey || e.dead || shield(e)) continue; // qorunanın içindən güllə keçir
     const r = 0.4, h = charHeight(e);
     const ox = o[0] - e.x, oz = o[2] - e.z;
     const a = d[0] * d[0] + d[2] * d[2];
@@ -282,7 +301,7 @@ function raycastEntities(o, d, maxT, skipKey) {
 
 function damage(target, amount, attacker, weapon) {
   const now = Date.now();
-  if (target.dead || now < (target.protUntil || 0)) return null;
+  if (target.dead || now < (target.protUntil || 0) || shield(target) || shield(attacker)) return null;
   target.hp = Math.max(0, target.hp - amount);
   target.lastHit = now;
   target.hpSent = Math.round(target.hp);
@@ -522,6 +541,7 @@ function joinMatch(ws, id, team, mode) {
   if (mt.state === 'play' || mt.state === 'count') return send(ws, { t: 'sys', msg: '⏳ Matç artıq başlayıb — bitəndə qoşula bilərsən.' });
   const e = entities.get(key);
   if (!e || e.dead) return;
+  if (inCombat(e)) return send(ws, { t: 'sys', msg: COMBAT_MSG });
   const cur = matchOf(key);
   if (cur && cur !== mt) leaveMatch(key, '', true);
   if (mt.state === 'idle' || mt.state === 'end') Object.assign(mt, { mode: mode === 2 ? 2 : 1, state: 'wait', A: [], B: [], score: { A: 0, B: 0 }, win: null });
@@ -709,6 +729,7 @@ const doorOut = () => ({ x: EXAM_ROOM.door.out[0] + (Math.random() - 0.5) * 2, z
 
 function examCreate(ws) {
   if (!EXAM_ROOM) return;
+  if (inCombat(entities.get(ws.key))) return send(ws, { t: 'sys', msg: COMBAT_MSG });
   const cur = examOf(ws.key);
   if (cur && cur.members.get(ws.key).st !== 'out') return send(ws, { t: 'sys', msg: 'Sən artıq bir imtahan otağındasan.' });
   const inst = freeInstance();
@@ -723,6 +744,7 @@ function examCreate(ws) {
 function examJoin(ws, id) {
   const e = entities.get(ws.key);
   if (!e || e.dead) return;
+  if (inCombat(e)) return send(ws, { t: 'sys', msg: COMBAT_MSG });
   const cur = examOf(ws.key);
   if (cur && cur.members.get(ws.key).st !== 'out') return;
   let S = id ? examSessions.get(Number(id)) : [...examSessions.values()].find((x) => x.state === 'lobby' || x.state === 'count');
@@ -1173,6 +1195,8 @@ wss.on('connection', (ws, req) => {
       const e = entities.get(ws.key);
       const now = Date.now();
       if (!e || e.dead || ws.reloading) return;
+      const sh = shield(e);
+      if (sh) return send(ws, { t: 'combatOff', why: sh, msg: SHIELD_MSG[sh] });
       if (now - (ws.lastShot || 0) < W.pistol.cooldown) return;
       if (ws.ammo <= 0) return send(ws, { t: 'ammo', ammo: 0 });
       let o = vec3(m.o), d = vec3(m.d);
@@ -1184,6 +1208,7 @@ wss.on('connection', (ws, req) => {
       const eye = [e.x, e.y + 1.45, e.z];
       if (Math.hypot(o[0] - eye[0], o[1] - eye[1], o[2] - eye[2]) > 2.5) o = eye;
       ws.lastShot = now;
+      e.lastAttack = now;
       ws.ammo--;
       e.emote = 0;
       const wallT = Math.min(W.pistol.range, raycastWorld(o, d));
@@ -1204,14 +1229,17 @@ wss.on('connection', (ws, req) => {
       const e = entities.get(ws.key);
       const now = Date.now();
       if (!e || e.dead || now - (ws.lastPunch || 0) < W.fist.cooldown) return;
+      const sh = shield(e);
+      if (sh) return send(ws, { t: 'combatOff', why: sh, msg: SHIELD_MSG[sh] });
       ws.lastPunch = now;
+      e.lastAttack = now;
       e.emote = 0;
       broadcast({ t: 'punch', id: e.key }, ws);
       // qarşıdakı ən yaxın hədəf (±65°)
       const fx = Math.sin(e.ry), fz = Math.cos(e.ry);
       let best = null, bestD = W.fist.range;
       for (const o of entities.values()) {
-        if (o === e || o.dead || Math.abs(o.y - e.y) > 1.2) continue;
+        if (o === e || o.dead || Math.abs(o.y - e.y) > 1.2 || shield(o)) continue;
         const dx = o.x - e.x, dz = o.z - e.z, dist = Math.hypot(dx, dz);
         if (dist > bestD || dist < 1e-3) continue;
         if ((dx * fx + dz * fz) / dist < 0.42) continue;
@@ -1262,7 +1290,7 @@ wss.on('connection', (ws, req) => {
       const now = Date.now();
       const no = (msg) => send(ws, { t: 'tpErr', msg });
       if (e.dead) return no('Ölü ikən teleport olmaq olmaz.');
-      if (now - (e.lastHit || 0) < 6000) return no('⚔ Döyüşdəsən — 6 saniyə zərər almadan gözlə.');
+      if (inCombat(e)) return no(COMBAT_MSG);
       const xs = examOf(ws.key);
       if (xs && xs.state === 'exam' && xs.members.get(ws.key).st === 'in') return no('İmtahan zamanı teleport olmaq olmaz 😏');
       if (matches.some((mt) => (mt.state === 'play' || mt.state === 'count') && teamOf(mt, ws.key))) return no('Matç gedir — əvvəlcə matçı bitir.');
@@ -1336,6 +1364,26 @@ wss.on('connection', (ws, req) => {
       return send(ws, { t: 'board', rows });
     }
 
+    // 🛡 Təhlükəsiz rejim: açmaq üçün 6 san döyüşsüz (nə zərər alıb, nə vurub), dəyişmək üçün 10 san ara
+    if (m.t === 'safe' && ws.inGame) {
+      const e = entities.get(ws.key), now = Date.now(), on = !!m.on;
+      if (!e) return;
+      const no = (msg) => send(ws, { t: 'safe', on: !!acc.safe, err: msg });
+      if (on === !!acc.safe) return no('');
+      if (e.dead) return no('Ölü ikən rejimi dəyişmək olmaz.');
+      const wait = SAFE_TOGGLE - (now - (e.safeAt || 0));
+      if (wait > 0) return no(`⏳ Rejimi tez-tez dəyişmək olmaz — ${Math.ceil(wait / 1000)} san gözlə.`);
+      if (on && inCombat(e)) return no(COMBAT_MSG);
+      if (on && now - (e.lastAttack || 0) < SAFE_COMBAT) return no('⚔ Bu yaxınlarda kimisə vurmusan — 6 saniyə gözlə.');
+      acc.safe = on;
+      e.safeAt = now;
+      if (on) e.w = 0;
+      scheduleSave();
+      send(ws, { t: 'safe', on });
+      broadcast({ t: 'entity', e: publicEntity(e) }, ws);
+      return;
+    }
+
     if (m.t === 'reload' && ws.inGame) {
       if (ws.reloading || ws.ammo >= W.pistol.mag) return;
       ws.reloading = true;
@@ -1406,7 +1454,7 @@ wss.on('connection', (ws, req) => {
       e.moving = !!m.m;
       // 5 = oturub, 7–12 = yeni emosiyalar (4 və 6 yalnız dar ağacı/çarmıx məhkumları üçündür)
       e.emote = [0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13].includes(m.e) ? m.e : 0;
-      e.w = m.w === 1 ? 1 : 0;
+      e.w = m.w === 1 && !shield(e) ? 1 : 0; // qorunan oyunçunun əlində silah olmur
       // Gəzməyə görə XP
       const d = Math.min(3, Math.hypot(e.x - ws.lastPos.x, e.z - ws.lastPos.z));
       ws.lastPos = { x: e.x, z: e.z };
