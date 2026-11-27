@@ -197,6 +197,7 @@ function handle(m) {
       break;
     case 'chat': addChat(m.name, m.text); break;
     case 'sys': addChat(null, m.msg); break;
+    case 'loggedOut': backToLogin(); break;
     case 'kicked':
       state.kicked = true;
       showOverlay(m.msg, true);
@@ -1126,6 +1127,7 @@ const touchCtl = TOUCH ? initTouch({
   isGame: () => state.mode === 'game' && !gallows.open,
   rotateCamera: (dx, dy) => rotateCamera(dx, dy),
   attack: () => attack(),
+  logout: () => askLogout(),
   key: (code, down) => window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: KEY_NAMES[code] || code.replace(/^Key|^Digit/, '').toLowerCase() })),
 }) : null;
 
@@ -1191,6 +1193,42 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, 2800);
 }
+// ---------- Çıxış (logout): təsdiq, sonra səhifəni yeniləmədən giriş ekranına ----------
+function askLogout() {
+  if (!state.inGame) return;
+  if (document.pointerLockElement) document.exitPointerLock();
+  $('settings').hidden = true;
+  document.body.classList.remove('menu-open', 'show-emotes');
+  $('logout-confirm').hidden = false;
+}
+$('btn-logout').onclick = askLogout;
+$('logout-no').onclick = () => { $('logout-confirm').hidden = true; };
+$('logout-yes').onclick = () => { $('logout-confirm').hidden = true; send({ t: 'logout' }); };
+function backToLogin() {
+  Object.assign(state, { inGame: false, mode: 'login', myId: null });
+  keys.clear();
+  inter.charging = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  Object.assign(player, { sitting: null, emote: 0, smoking: false, safe: false, dead: false, weapon: 0 });
+  if (player.char) attachGun(player, false);
+  exam?.reset();
+  if (gallows.open) closeGallowsPanel();
+  closeMatchPanel();
+  toggleTeleport(false);
+  for (const id of ['board', 'settings', 'logout-confirm']) $(id).hidden = true;
+  for (const o of others.values()) scene.remove(o.char.root);
+  others.clear();
+  $('hud').hidden = true;
+  document.body.classList.remove('in-room', 'shielded', 'aiming', 'in-exam', 'menu-open', 'show-emotes', 'photo');
+  // ad yadda qalır, PIN yox
+  $('login-pin').value = '';
+  $('login-pin2').value = '';
+  setAuthMode('login');
+  $('login-name').value = localStorage.getItem('bmu-name') || state.name || '';
+  $('login-btn').disabled = false;
+  $('login').hidden = false;
+}
+
 function showOverlay(msg, reload) {
   $('overlay-msg').textContent = msg;
   $('overlay-btn').hidden = !reload;

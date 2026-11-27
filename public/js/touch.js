@@ -94,6 +94,7 @@ export function initTouch(opts) {
       else if (act === 'attack') opts.attack();
       else if (act === 'menu') document.body.classList.toggle('menu-open');
       else if (act === 'emotes') document.body.classList.toggle('show-emotes');
+      else if (act === 'logout') opts.logout?.();
       else if (act === 'fullscreen') {
         const el = document.documentElement;
         if (!document.fullscreenElement) {

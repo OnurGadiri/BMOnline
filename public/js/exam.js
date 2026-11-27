@@ -121,6 +121,8 @@ export function initExam(d) {
 
   return {
     get on() { return inExam(); },
+    /** çıxışda (logout): imtahan və lobbi panellərini bağla, siyahını sıfırla */
+    reset() { closeExam(); lob.hidden = true; ex.list = []; $('xres').hidden = true; },
     openLobby() { lob.hidden = false; renderLobby(); if (document.pointerLockElement) document.exitPointerLock(); },
     onMsg(m) {
       switch (m.t) {

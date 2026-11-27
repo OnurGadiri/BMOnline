@@ -459,3 +459,11 @@ body.photo .smoke-chip { display: none !important; }
   #login .card label { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
   #login .card label input { flex: 0 0 60%; }
 }
+
+/* Çıxış */
+.logout-btn { pointer-events: auto; background: #b3423a; color: #fff; margin-top: 2px; }
+.screen.confirm { z-index: 40; background: #0009; }
+.screen.confirm h2 { margin: 0; font-size: 22px; }
+.confirm-btns { display: flex; gap: 10px; }
+.confirm-btns button { flex: 1; padding: 11px; }
+button.danger { background: #c94c3f; color: #fff; }

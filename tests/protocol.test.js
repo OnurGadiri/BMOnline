@@ -572,6 +572,58 @@ async function enter(name, pin = '1234', existing = false) {
     await sleep(300);
   }
 
+  // --- 8g. 🚪 Çıxış (logout): NPC olur, matç/imtahandan çıxır, eyni bağlantıda başqa hesabla girmək olur ---
+  {
+    const L = await enter('Gamma', '1234', true);
+    // imtahan lobbisi: Rektorluğa teleport (gözləmə varsa təkrar), yeni otaq aç
+    for (let i = 0; i < 3; i++) {
+      const c = L.c.waitT('correct', 2000), er = L.c.waitT('tpErr', 2000);
+      L.c.send({ t: 'tp', id: 'rect' });
+      if ((await Promise.race([c, er]))?.t === 'correct') break;
+      await sleep(10500);
+    }
+    await sleep(150);
+    const inLobby = A.c.waitT('xlist', 2000, (m) => m.s.some((x) => x.names.includes('Gamma')));
+    L.c.send({ t: 'xjoin', new: true });
+    ok('çıxışdan əvvəl: oyunçu imtahan lobbisindədir', !!(await inLobby));
+    const inMatch = A.c.waitT('matches', 2000, (m) => m.m.some((x) => x.id === 'football' && x.kA.includes('gamma')));
+    L.c.send({ t: 'match', act: 'join', id: 'football', team: 'A', mode: 1 });
+    ok('çıxışdan əvvəl: oyunçu matç komandasındadır', !!(await inMatch));
+    const npc = A.c.waitT('entity', 2500, (m) => m.e.id === 'gamma' && m.e.online === false);
+    const outMatch = A.c.waitT('matches', 2500, (m) => m.m.some((x) => x.id === 'football' && !x.kA.includes('gamma')));
+    const outLobby = A.c.waitT('xlist', 2500, (m) => !m.s.some((x) => x.names.includes('Gamma')));
+    const bye = L.c.waitT('loggedOut', 2000);
+    L.c.send({ t: 'logout' });
+    ok('çıxış təsdiqlənir (loggedOut)', !!(await bye));
+    ok('çıxan oyunçu NPC-yə çevrilir (oflayn, kampusda qalır)', !!(await npc));
+    ok('çıxışda matçdan çıxarılır', !!(await outMatch));
+    ok('çıxışda imtahan lobbisindən çıxarılır', !!(await outLobby));
+    // çıxdıqdan sonra bu bağlantıdan gələn oyun mesajları heç nə etmir
+    const ghost = A.c.waitT('chat', 800, (m) => m.name === 'Gamma');
+    L.c.send({ t: 'chat', text: 'hələ buradayam?' });
+    ok('çıxdıqdan sonra həmin bağlantı oyunda heç nə edə bilmir', !(await ghost));
+    // eyni bağlantıda başqa hesabla giriş
+    await sleep(850);
+    L.c.send({ t: 'login', name: 'Delta', pin: '1234' });
+    const lo2 = await L.c.waitT('loginOk', 2000);
+    L.c.send({ t: 'join' });
+    const w2 = await L.c.waitT('welcome', 2000);
+    ok('çıxıb başqa hesabla girmək olur', lo2?.name === 'Delta' && w2?.you.id === 'delta');
+    // yenidən çıxıb öz hesabına qayıt
+    const bye2 = L.c.waitT('loggedOut', 2000);
+    L.c.send({ t: 'logout' });
+    await bye2;
+    await sleep(850);
+    const back = A.c.waitT('entity', 2500, (m) => m.e.id === 'gamma' && m.e.online === true);
+    L.c.send({ t: 'login', name: 'Gamma', pin: '1234' });
+    await L.c.waitT('loginOk', 2000);
+    L.c.send({ t: 'join' });
+    const w3 = await L.c.waitT('welcome', 2000);
+    ok('çıxdıqdan sonra yenidən girmək olur (NPC yenə oyunçu olur)', w3?.you.id === 'gamma' && !!(await back));
+    L.c.close();
+    await sleep(300);
+  }
+
   // --- 9. Eyni hesabla ikinci giriş, çıxış → NPC ---
   const kicked = B.c.waitT('kicked', 3000);
   const offline = A.c.waitT('entity', 6000, (m) => m.e.id === 'beta' && m.e.online === false);

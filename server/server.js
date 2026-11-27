@@ -1159,6 +1159,18 @@ wss.on('connection', (ws, req) => {
     if (!ws.key) return;
     const acc = db.accounts[ws.key];
 
+    // Çıxış: oyunçu oflayn olur (matç/imtahandan çıxır, xarakteri NPC kimi gəzir), bağlantı qalır — eyni və ya başqa hesabla yenidən girmək olar
+    if (m.t === 'logout') {
+      const key = ws.key;
+      if (sockets.get(key) === ws) {
+        sockets.delete(key);
+        if (ws.inGame) goOffline(key);
+        else leaveMatch(key, 'oyundan çıxdı');
+      }
+      Object.assign(ws, { key: null, inGame: false, reloading: false, lastPos: null });
+      return send(ws, { t: 'loggedOut' });
+    }
+
     if (m.t === 'saveChar') {
       const a = validAppearance(m.appearance);
       if (!a) return send(ws, { t: 'error', msg: 'Xarakter məlumatı yanlışdır.' });

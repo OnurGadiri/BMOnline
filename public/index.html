@@ -34,6 +34,18 @@
     </form>
   </div>
 
+  <!-- Çıxış təsdiqi -->
+  <div id="logout-confirm" class="screen confirm" hidden>
+    <div class="card">
+      <h2>🚪 Çıxmaq istəyirsən?</h2>
+      <p class="sub">Xarakterin kampusda NPC kimi gəzməyə davam edəcək. Matçdan və imtahandan çıxacaqsan.</p>
+      <div class="confirm-btns">
+        <button id="logout-yes" type="button" class="danger">Bəli, çıx</button>
+        <button id="logout-no" type="button" class="ghost">Ləğv et</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Xarakter redaktoru -->
   <div id="creator" hidden>
     <div class="panel">
@@ -96,6 +108,7 @@
         <label class="row"><input id="set-minimal" type="checkbox" /> Minimal interfeys (U)</label>
         <label class="row"><input id="set-fps" type="checkbox" /> FPS göstər</label>
         <div class="tip">📸 <b>P</b> foto · 👁 <b>V</b> birinci şəxs</div>
+        <button id="btn-logout" type="button" class="logout-btn">🚪 Çıxış</button>
       </div>
     </div>
     <div class="weapon-hud">
@@ -165,6 +178,7 @@
         <button type="button" class="tbtn s" data-key="KeyV" aria-label="Birinci şəxs">👁</button>
         <button type="button" class="tbtn s" data-key="KeyU" aria-label="Minimal">🧹</button>
         <button type="button" class="tbtn s" data-key="KeyT" aria-label="Sürətli yol">🧭</button>
+        <button type="button" class="tbtn s" data-act="logout" aria-label="Çıxış">🚪</button>
         <button type="button" class="tbtn s" data-key="KeyB" aria-label="Təhlükəsiz rejim">🛡</button>
       </div>
     </div>
