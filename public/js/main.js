@@ -10,6 +10,8 @@ import { Minimap } from './minimap.js';
 import { Play, BALL_G } from './play.js';
 import { initTouch, touchInput, isTouchDevice } from './touch.js';
 import { buildBirds } from './birds.js';
+import { buildClassroom, buildRoomDoor } from './classroom.js';
+import { initExam } from './exam.js';
 
 const TOUCH = isTouchDevice();
 
@@ -54,6 +56,7 @@ sun.castShadow = true;
 const SHADOW = { high: [4096, 60], low: [1024, 40] };
 scene.add(sun, sun.target);
 let world = null;
+let rooms = []; // { cfg, room, exam }
 let play = null; // toplar, ulduzlar
 let updateBirds = null;
 const fx = new Fx(scene);
@@ -217,6 +220,10 @@ function handle(m) {
     // ---- interaksiyalar ----
     case 'balls':
       play?.setBalls(m.b);
+      break;
+    case 'examResult':
+      if (m.xp) toast(`+${m.xp} XP`);
+      else if (m.cool) toast('İmtahan XP-si 3 dəqiqədə bir verilir.');
       break;
     case 'matches':
       setMatches(m.m);
@@ -569,6 +576,15 @@ function enterGame(m) {
     play = new Play(scene, CAMPUS, sfx);
     window.__bmu.play = play;
     buildStaticNpcs();
+    // ayrıca otaqlar (Kapital Bank Room) və kampusdakı qapıları
+    world.rooms = [];
+    rooms = (CAMPUS.rooms || []).map((cfg) => {
+      buildRoomDoor(scene, cfg);
+      const room = buildClassroom(scene, cfg, world);
+      world.rooms.push(room.bounds);
+      const exam = initExam({ room, $, player, sit, stand, send, toast, bigBanner, sfx });
+      return { cfg, room, exam };
+    });
     updateBirds = buildBirds(scene, CAMPUS.spawn, LOW ? 9 : 18);
   }
   state.myId = m.you.id;
@@ -694,6 +710,7 @@ window.addEventListener('keydown', (e) => {
     chatInput.focus();
     return;
   }
+  if (state.mode === 'game' && rooms.some((r) => r.exam.key(e.code, true))) { e.preventDefault(); return; }
   if (e.code === 'Escape' && gallows.open) { closeGallowsPanel(); return; }
   if (e.code === 'Escape' && mpanel.open) { closeMatchPanel(); return; }
   if (e.code === 'KeyF' && (nearGallows() || gallows.open)) { gallows.open ? closeGallowsPanel() : openGallowsPanel(nearSite()); return; }
@@ -717,6 +734,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => {
   keys.delete(e.code);
+  if (rooms.some((r) => r.exam.key(e.code, false))) return;
   if (e.code === 'KeyF') interactUp();
   if (e.code === 'Tab') $('board').hidden = true;
 });
@@ -957,7 +975,7 @@ function updatePlayer(dt) {
     else {
       root.position.copy(player.pos);
       root.rotation.y = player.ry;
-      animateRig(player.char.rig, dt, 0, { emote: 5 });
+      animateRig(player.char.rig, dt, 0, { emote: player.emote === 13 ? 13 : 5 });
       sendPos(dt, false);
       return;
     }
@@ -1017,6 +1035,9 @@ function sendPos(dt, moving) {
 
 // ---------- İnteraksiyalar (F): oturmaq, topa vurmaq ----------
 const inter = { current: null, charging: false, charge: 0, ball: null };
+function roomHere() {
+  return rooms.find((r) => { const b = r.room.bounds; return player.pos.x > b.minX - 1 && player.pos.x < b.maxX + 1 && player.pos.z > b.minZ - 1 && player.pos.z < b.maxZ + 1; }) || null;
+}
 function findInteraction() {
   if (player.dead || state.mode !== 'game' || !world) return null;
   if (player.sitting) return { kind: 'stand', label: 'Qalx' };
@@ -1031,6 +1052,14 @@ function findInteraction() {
   for (const s of world.seats) {
     const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
     if (d < bd) { bd = d; best = s; }
+  }
+  // otaq qapıları və imtahan
+  for (const r of rooms) {
+    const dd = r.cfg.door, ex = r.cfg.exit, td = r.room.teacherDesk;
+    if (Math.hypot(player.pos.x - dd.x, player.pos.z - dd.z) < 2.6) return { kind: 'room', act: 'enter', id: r.cfg.id, label: `🚪 ${r.cfg.title} — içəri gir` };
+    if (Math.hypot(player.pos.x - ex.x, player.pos.z - ex.z) < 2.2) return { kind: 'room', act: 'leave', id: r.cfg.id, label: '🚪 Otaqdan çıx' };
+    if (!r.exam.on && Math.hypot(player.pos.x - r.room.tch.pos.x, player.pos.z - r.room.tch.pos.z) < 2.6) return { kind: 'exam', r, label: '📝 C# imtahanına başla (kopya missiyası)' };
+    if (!r.exam.on && Math.hypot(player.pos.x - td.x, player.pos.z - td.z) < 1.8) return { kind: 'exam', r, label: '📝 C# imtahanına başla (kopya missiyası)' };
   }
   if (best) return { kind: 'sit', seat: best, label: 'Otur' };
   if (!mpanel.open && venuesHere().length && !activeMyMatch()) return { kind: 'match', label: 'Matç paneli (1v1 / 2v2)' };
@@ -1049,7 +1078,8 @@ function stand() {
   const s = player.sitting;
   player.sitting = null;
   player.emote = 0;
-  if (s) { player.pos.x += Math.sin(s.ry) * 0.95; player.pos.z += Math.cos(s.ry) * 0.95; }
+  if (s?.out) { player.pos.x += s.out[0]; player.pos.z += s.out[1]; }
+  else if (s) { player.pos.x += Math.sin(s.ry) * 0.95; player.pos.z += Math.cos(s.ry) * 0.95; }
 }
 function interactDown() {
   const it = inter.current;
@@ -1058,6 +1088,8 @@ function interactDown() {
   if (it.kind === 'sit') sit(it.seat);
   else if (it.kind === 'stand') stand();
   else if (it.kind === 'match') openMatchPanel();
+  else if (it.kind === 'room') send({ t: 'room', act: it.act, id: it.id });
+  else if (it.kind === 'exam') it.r.exam.start();
   else if (it.kind === 'ball') {
     // voleybolda top uçarkən gözləməyə vaxt yoxdur — dərhal vurulur
     if (it.ball.cfg.kind === 'volleyball' && !it.ball.hold) { kickBall(it.ball, 0.55); return; }
@@ -1374,6 +1406,8 @@ function frame(dt) {
   updateGallowsUi();
   updateInteractions(dt);
   updateMatchHud();
+  for (const r of rooms) r.exam.update(dt);
+  { const inRoom = !!roomHere(); if (inRoom !== frame.inRoom) { frame.inRoom = inRoom; document.body.classList.toggle('in-room', inRoom); } }
   updateCamera(dt);
   world.update(clock.elapsedTime, dt, camera);
   updateBirds?.(clock.elapsedTime, dt);

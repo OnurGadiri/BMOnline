@@ -87,6 +87,14 @@
       "court": { "minX": 69.5, "maxX": 78.5, "minZ": -249.2, "maxZ": -231.2 }
     }
   ],
+  "rooms": [
+    {
+      "id": "kapital", "title": "Kapital Bank Room", "teacher": "Müəllim", "x": 0, "z": -360, "w": 12, "d": 18, "h": 3.3,
+      "door": { "x": -18.7, "z": 27, "ry": 1.5708, "out": [-17.2, 27], "label": "Yeni bina — Kapital Bank Room" },
+      "exit": { "x": -4, "z": -351 },
+      "spawn": [-4, -352.3]
+    }
+  ],
   "matches": [
     {
       "id": "football", "ball": "football", "title": "⚽ Futbol", "target": 3, "time": 180,

@@ -631,6 +631,13 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.armLx = 0.05; T.armLz = 0.1; T.elbowL = -0.2;
     T.headX = 0.38; T.headY = Math.sin(t * 2.2) * 0.12;
     T.spineX = 0.08;
+  } else if (emote === 13) {
+    // oturub partanın altında gizlicə telefona/şpargalkaya baxır
+    T.bodyY = 0.52 - (r.hipH || 0.92);
+    T.legL = T.legR = -1.5; T.kneeL = T.kneeR = 1.45;
+    T.armLx = T.armRx = -0.35; T.armLz = -0.12; T.armRz = 0.12; T.elbowL = T.elbowR = -1.05;
+    T.spineX = 0.22;
+    T.headX = 0.62 + Math.sin(t * 1.3) * 0.04; T.headY = Math.sin(t * 0.8) * 0.08;
   } else if (emote === 12) {
     // şinav: bədən üzü üstə, qollar yerə dirənir
     const p = (Math.sin(t * 4) + 1) / 2;

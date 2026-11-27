@@ -82,6 +82,9 @@ function validPos(x, z) {
   if (!(x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ)) return false;
   return !CAMPUS.buildings.some((bd) => Math.abs(x - bd.x) < bd.w / 2 + 0.5 && Math.abs(z - bd.z) < bd.d / 2 + 0.5);
 }
+// ---------- Otaqlar (ayrıca qapalı məkanlar, məs. Kapital Bank Room) ----------
+const ROOMS = (CAMPUS.rooms || []).map((r) => ({ ...r, rect: { minX: r.x - r.w / 2, maxX: r.x + r.w / 2, minZ: r.z - r.d / 2, maxZ: r.z + r.d / 2 } }));
+const roomAt = (x, z, m = 1) => ROOMS.find((r) => x > r.rect.minX - m && x < r.rect.maxX + m && z > r.rect.minZ - m && z < r.rect.maxZ + m) || null;
 function clearLine(x1, z1, x2, z2) {
   return !CAMPUS.buildings.some((b) => segHitsBox(x1, z1, x2, z2, b));
 }
@@ -584,6 +587,8 @@ function goOffline(key) {
   if (!e || !e.online) return;
   e.online = false;
   e.w = 0;
+  const rmOff = roomAt(e.x, e.z);
+  if (rmOff) { e.x = rmOff.door.out[0]; e.z = rmOff.door.out[1]; }
   leaveMatch(key, 'oyundan çıxdı');
   if (!e.dead) startAI(e); // ölüdürsə, yenidən doğulanda AI başlayır
   broadcast({ t: 'entity', e: publicEntity(e) });
@@ -798,6 +803,45 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    if (m.t === 'room' && ws.inGame) {
+      const e = entities.get(ws.key);
+      const r = ROOMS.find((x) => x.id === m.id);
+      if (!e || e.dead || !r) return;
+      let to = null;
+      if (m.act === 'enter' && Math.hypot(e.x - r.door.x, e.z - r.door.z) < 4) to = r.spawn;
+      else if (m.act === 'leave' && roomAt(e.x, e.z) === r && Math.hypot(e.x - r.exit.x, e.z - r.exit.z) < 3) to = r.door.out;
+      if (!to) return;
+      leaveMatch(ws.key, 'meydançanı tərk etdi');
+      e.x = to[0]; e.z = to[1]; e.y = 0; e.emote = 0;
+      ws.lastPosAt = Date.now();
+      ws.examStart = 0;
+      return send(ws, { t: 'correct', x: e.x, y: 0, z: e.z });
+    }
+
+    // C# imtahanı (kopya missiyası): server yalnız vaxtı və yeri yoxlayıb XP verir
+    if (m.t === 'exam' && ws.inGame) {
+      const e = entities.get(ws.key);
+      if (!e || !roomAt(e.x, e.z)) return;
+      const now = Date.now();
+      if (m.act === 'start') { ws.examStart = now; return; }
+      if (m.act !== 'done' || !ws.examStart) return;
+      const took = now - ws.examStart;
+      ws.examStart = 0;
+      if (took < 20_000) return; // çox tez — saxta nəticə
+      const acc = db.accounts[ws.key];
+      const correct = Math.max(0, Math.min(5, Math.floor(Number(m.correct) || 0)));
+      const caught = !!m.caught, cheated = !!m.cheated;
+      const cool = now - (acc.lastExam || 0) < 180_000; // 3 dəqiqədə bir XP
+
+      let xp = 0;
+      if (!caught && !cool) xp = correct * 8 + (correct === 5 ? 10 : 0) + (!cheated && correct >= 3 ? 15 : 0);
+      if (xp) { addXp(ws.key, xp); acc.lastExam = now; }
+      acc.exams = (acc.exams || 0) + 1;
+      broadcast({ t: 'sys', msg: caught ? `🚨 ${acc.name} C# imtahanında kopya çəkərkən tutuldu!`
+        : `📝 ${acc.name} C# imtahanından ${correct}/5 aldı${cheated ? ' (kopya ilə 😏)' : ' — dürüst! 👏'}` });
+      return send(ws, { t: 'examResult', xp, cool });
+    }
+
     if (m.t === 'match' && ws.inGame) {
       if (m.act === 'join') joinMatch(ws, String(m.id), m.team, Number(m.mode));
       else if (m.act === 'leave') leaveMatch(ws.key, 'matçdan çıxdı');
@@ -890,13 +934,15 @@ wss.on('connection', (ws, req) => {
       if (Math.hypot(x - e.x, z - e.z) > 9.5 * dtp + 2.5) {
         return send(ws, { t: 'correct', x: e.x, y: e.y, z: e.z });
       }
-      e.x = Math.min(b.maxX, Math.max(b.minX, x));
-      e.z = Math.min(b.maxZ, Math.max(b.minZ, z));
+      const rm = roomAt(x, z);
+      const lim = rm ? rm.rect : b;
+      e.x = Math.min(lim.maxX, Math.max(lim.minX, x));
+      e.z = Math.min(lim.maxZ, Math.max(lim.minZ, z));
       e.y = Math.min(10, Math.max(0, y));
       e.ry = ry;
       e.moving = !!m.m;
       // 5 = oturub, 7–12 = yeni emosiyalar (4 və 6 yalnız dar ağacı/çarmıx məhkumları üçündür)
-      e.emote = [0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12].includes(m.e) ? m.e : 0;
+      e.emote = [0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13].includes(m.e) ? m.e : 0;
       e.w = m.w === 1 ? 1 : 0;
       // Gəzməyə görə XP
       const d = Math.min(3, Math.hypot(e.x - ws.lastPos.x, e.z - ws.lastPos.z));

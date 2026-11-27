@@ -85,6 +85,12 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   a kick and release to shoot in the direction you are looking. Goals are announced to everyone (+15 XP).
 - **Basketball:** hold **F** next to the ball on the volleyball court and release in the middle of the
   power bar to shoot at the hoop on the wall (+10 XP per basket).
+- **Kapital Bank Room & C# exam mission:** a door on the east side of the new building (Yeni bina) leads
+  into the Kapital Bank Room classroom (red graduation-cap wall, orange/yellow window wall, desks, screen).
+  Talk to the (fictional) teacher to start the "Modern programming (C#)" exam: you sit at a desk and answer
+  5 C# questions. Hold **F** to peek at your cheat sheet — it reveals the right answer, but if the teacher
+  sees you while she is watching the class or walking the aisle, suspicion rises and you get caught.
+  Answer with **1-3**. XP for correct answers, a bonus for 5/5 and for passing honestly.
 - **Volleyball:** a ball with a real net on the volleyball court. Press **F** to hit it over the net
   (hold **F** to charge a serve).
 - **Matches (1v1 / 2v2):** inside the football pitch or the volleyball/basketball court, press **F**

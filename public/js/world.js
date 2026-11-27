@@ -848,6 +848,7 @@ export function buildWorld(scene, campus, quality = 'high') {
     hardAreas.some((a) => Math.abs(x - a.x) < a.w / 2 + m && Math.abs(z - a.z) < a.d / 2 + m) ||
     edges.some((e) => segDist(x, z, e) < e.half + m) ||
     (campus.gallows && Math.abs(x - campus.gallows.x) < 6 + m && Math.abs(z - campus.gallows.z) < 6 + m) ||
+    (campus.rooms || []).some((r) => Math.hypot(x - r.door.x, z - r.door.z) < 6 + m) ||
     circles.some((c) => Math.hypot(x - c.x, z - c.z) < c.r + m);
   plantTrees(scene, campus, edges, blocked, circles, R);
 
@@ -1456,7 +1457,8 @@ function buildCrucifix(scene, c, colliders) {
 
 /** Oyunçunu binalardan, ağaclardan, sərhəddən kənarda saxlayır */
 export function resolveCollisions(pos, radius, world) {
-  const b = world.bounds;
+  // ayrıca otaqdadırsa (kampusdan kənarda) sərhəd otağın divarlarıdır
+  const b = world.rooms?.find((r) => pos.x > r.minX - 1 && pos.x < r.maxX + 1 && pos.z > r.minZ - 1 && pos.z < r.maxZ + 1) || world.bounds;
   pos.x = Math.min(b.maxX - radius - 0.3, Math.max(b.minX + radius + 0.3, pos.x));
   pos.z = Math.min(b.maxZ - radius - 0.3, Math.max(b.minZ + radius + 0.3, pos.z));
   for (const c of world.colliders) {

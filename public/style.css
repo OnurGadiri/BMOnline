@@ -350,3 +350,36 @@ body.touch .mh-title { display: none; }
 body.touch .mchip { bottom: auto; top: 100px; font-size: 13px; padding: 6px 12px; }
 body.touch .mchip small { display: none; }
 body.photo .mhud, body.photo .mchip { display: none !important; }
+
+/* C# imtahanı (kopya missiyası) */
+.exam { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(520px, 94vw); background: #fdfcf7; color: #1b2838;
+  border-radius: 14px; padding: 12px 14px; box-shadow: 0 10px 30px #0006; z-index: 20; font-size: 14px; }
+.ex-head { display: flex; align-items: center; gap: 10px; }
+.ex-head b { flex: 1; }
+.ex-head .icon { background: #0001; color: #1b2838; }
+#ex-time { font-variant-numeric: tabular-nums; font-weight: 700; }
+.ex-num { font-size: 11px; opacity: .6; margin-top: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.ex-q { font-size: 17px; font-weight: 700; margin: 4px 0 10px; font-family: Consolas, 'Segoe UI', monospace; }
+.ex-opts { display: flex; flex-direction: column; gap: 6px; }
+.ex-opt { display: flex; gap: 10px; align-items: center; text-align: left; background: #eef1f5; color: #1b2838; padding: 8px 10px; font-family: Consolas, monospace; font-size: 15px; }
+.ex-opt b { background: #1b2838; color: #fff; border-radius: 6px; padding: 1px 7px; font-size: 12px; }
+.ex-opt:hover { background: #dfe6ee; }
+.ex-opt.hint { background: #c9f2d4; outline: 2px solid #2a9d55; }
+.ex-note { font-size: 12px; color: #2a9d55; margin-top: 6px; }
+.ex-bars { display: flex; gap: 12px; margin-top: 10px; }
+.ex-bars label { flex: 1; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+.ex-bar { height: 8px; background: #0001; border-radius: 5px; overflow: hidden; }
+.ex-bar div { height: 100%; width: 0; background: #3a86ff; transition: width .1s linear; }
+.ex-bar.sus div { background: linear-gradient(90deg, #f4a261, #e63946); }
+.ex-eye { margin-top: 8px; font-weight: 700; text-align: center; padding: 5px; border-radius: 8px; background: #e7f5ec; color: #2a7a4a; }
+.ex-eye.warn { background: #fff3cd; color: #9a6b00; }
+.ex-eye.look { background: #e63946; color: #fff; animation: ex-blink .5s infinite alternate; }
+@keyframes ex-blink { to { opacity: .75; } }
+.ex-tip { font-size: 11px; opacity: .6; margin-top: 6px; text-align: center; }
+body.in-exam .help, body.in-exam .weapon-hud, body.in-exam #iprompt, body.in-exam .emotes { display: none !important; }
+body.in-room .minimap { display: none; }
+body.touch .exam { bottom: auto; top: 8px; padding: 8px 10px; font-size: 12px; }
+body.touch .ex-q { font-size: 14px; margin: 2px 0 6px; }
+body.touch .ex-opt { padding: 6px 8px; font-size: 13px; }
+body.touch .ex-tip { display: none; }
+body:not(.touch) .exam { left: auto; right: 16px; transform: none; width: min(420px, 94vw); }
