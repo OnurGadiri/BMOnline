@@ -95,6 +95,9 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   at your own desk. If the teacher sees you out of your seat or cheating, suspicion rises; when it is full
   you are thrown out of the exam and wait for the others to finish — or open a new room with new players.
   Up to 3 exams can run at the same time; results and XP are announced when everyone has finished.
+- **Fast travel:** press **T** (or 🧭 in the mobile menu) to teleport to the rectorate (exam lobby), the central
+  plaza, the pitches, the gallows or the other buildings. Not available in combat (6 s without damage), during
+  a match or an exam, and only every 10 seconds.
 - **Volleyball:** a ball with a real net on the volleyball court. Press **F** to hit it over the net
   (hold **F** to charge a serve).
 - **Matches (1v1 / 2v2):** inside the football pitch or the volleyball/basketball court, press **F**

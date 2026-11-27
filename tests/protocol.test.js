@@ -322,6 +322,23 @@ async function enter(name, pin = '1234') {
     await sleep(300);
   }
 
+  // --- 8d. Sürətli yol (teleport) ---
+  {
+    const D = await enter('Delta');
+    const cor = D.c.waitT('correct', 2000);
+    const okM = D.c.waitT('tpOk', 2000);
+    D.c.send({ t: 'tp', id: 'rect' });
+    const c1 = await cor;
+    ok('Rektorluğa teleport olmaq olur', !!c1 && Math.hypot(c1.x - 55.5, c1.z + 141.5) < 2 && !!(await okM), c1 ? `${c1.x.toFixed(1)},${c1.z.toFixed(1)}` : '');
+    const err = D.c.waitT('tpErr', 1500);
+    D.c.send({ t: 'tp', id: 'plaza' });
+    ok('teleport arasında gözləmə var (10 san)', /saniyə/.test((await err)?.msg || ''));
+    const bad = D.c.waitT('correct', 600);
+    D.c.send({ t: 'tp', id: 'yoxdur' });
+    ok('olmayan nöqtəyə teleport olmur', !(await bad));
+    D.c.close();
+  }
+
   // --- 9. Eyni hesabla ikinci giriş, çıxış → NPC ---
   const kicked = B.c.waitT('kicked', 3000);
   const offline = A.c.waitT('entity', 6000, (m) => m.e.id === 'beta' && m.e.online === false);

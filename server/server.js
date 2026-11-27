@@ -1155,6 +1155,27 @@ wss.on('connection', (ws, req) => {
     }
 
     // C# imtahanı (kopya missiyası)
+    // Sürətli yol: xəritədəki əsas nöqtələrə teleport (döyüşdə, matçda, imtahanda olmaz; 10 san gözləmə)
+    if (m.t === 'tp' && ws.inGame) {
+      const e = entities.get(ws.key);
+      const pt = (CAMPUS.teleports || []).find((x) => x.id === m.id);
+      if (!e || !pt) return;
+      const now = Date.now();
+      const no = (msg) => send(ws, { t: 'tpErr', msg });
+      if (e.dead) return no('Ölü ikən teleport olmaq olmaz.');
+      if (now - (e.lastHit || 0) < 6000) return no('⚔ Döyüşdəsən — 6 saniyə zərər almadan gözlə.');
+      const xs = examOf(ws.key);
+      if (xs && xs.state === 'exam' && xs.members.get(ws.key).st === 'in') return no('İmtahan zamanı teleport olmaq olmaz 😏');
+      if (matches.some((mt) => (mt.state === 'play' || mt.state === 'count') && teamOf(mt, ws.key))) return no('Matç gedir — əvvəlcə matçı bitir.');
+      if (roomAt(e.x, e.z)) return no('Əvvəlcə sinifdən çıx.');
+      const left = 10000 - (now - (ws.lastTp || 0));
+      if (left > 0) return no(`Teleport ${Math.ceil(left / 1000)} saniyə sonra hazır olacaq.`);
+      ws.lastTp = now;
+      const x = pt.x + (Math.random() - 0.5) * 2, z = pt.z + (Math.random() - 0.5) * 2;
+      tpTo(ws.key, x, z);
+      return send(ws, { t: 'tpOk', name: pt.name });
+    }
+
     if (m.t === 'xjoin' && ws.inGame) {
       const e = entities.get(ws.key);
       if (!e || !EXAM_ROOM || Math.hypot(e.x - EXAM_ROOM.door.x, e.z - EXAM_ROOM.door.z) > 5) return;

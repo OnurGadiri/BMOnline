@@ -222,6 +222,14 @@ function handle(m) {
     case 'balls':
       play?.setBalls(m.b);
       break;
+    case 'tpOk':
+      toggleTeleport(false);
+      toast(`🧭 ${m.name}`);
+      sfx.chime?.(0.5);
+      break;
+    case 'tpErr':
+      toast(m.msg);
+      break;
     case 'xlist': case 'xstart': case 'xs': case 'xreveal': case 'xsay': case 'xout': case 'xend':
       exam?.onMsg(m);
       break;
@@ -338,7 +346,7 @@ function handle(m) {
         player.vy = 0;
         $('death').hidden = true;
         updateCombatHud();
-        toast('🛡 Yenidən doğuldun (3 san qorunursan)');
+        toast('🛡 Yenidən doğuldun (3 san qorunursan) · 🧭 T — sürətli yol');
       } else {
         const o = others.get(m.id);
         if (o) {
@@ -717,6 +725,7 @@ window.addEventListener('keydown', (e) => {
   if (state.mode === 'game' && exam?.key(e.code, true)) { e.preventDefault(); return; }
   if (e.code === 'Escape' && gallows.open) { closeGallowsPanel(); return; }
   if (e.code === 'Escape' && mpanel.open) { closeMatchPanel(); return; }
+  if (e.code === 'Escape' && !$('tp-panel').hidden) { toggleTeleport(false); return; }
   if (e.code === 'KeyF' && (nearGallows() || gallows.open)) { gallows.open ? closeGallowsPanel() : openGallowsPanel(nearSite()); return; }
   if (e.code === 'KeyF') { if (!e.repeat) interactDown(); return; }
   if (e.code === 'Tab') {
@@ -733,6 +742,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') { toggleFirstPerson(); return; }
   if (e.code === 'KeyH') { setHelpHidden(!settings.hideHelp); return; }
   if (e.code === 'KeyU') { setMinimal(!document.body.classList.contains('minimal-ui')); return; }
+  if (e.code === 'KeyT') { toggleTeleport(); return; }
   if (e.code === 'Space') e.preventDefault();
   keys.add(e.code);
 });
@@ -812,6 +822,28 @@ function killFeed(by, victim, weapon) {
   setTimeout(() => row.classList.add('out'), 5000);
   setTimeout(() => row.remove(), 5600);
 }
+
+// Sürətli yol (teleport) paneli — T və ya mobil 🧭
+function toggleTeleport(on = $('tp-panel').hidden) {
+  $('tp-panel').hidden = !on;
+  if (!on) return;
+  if (document.pointerLockElement) document.exitPointerLock();
+  const box = $('tp-list');
+  box.replaceChildren();
+  for (const p of CAMPUS.teleports || []) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tp-btn';
+    b.textContent = p.name;
+    const d = Math.round(Math.hypot(p.x - player.pos.x, p.z - player.pos.z));
+    const s = document.createElement('small');
+    s.textContent = ` ${d} m`;
+    b.append(s);
+    b.onclick = () => send({ t: 'tp', id: p.id });
+    box.append(b);
+  }
+}
+$('tp-close').onclick = () => toggleTeleport(false);
 
 // Birinci şəxs görünüşü
 function toggleFirstPerson(on = !cam.fp) {

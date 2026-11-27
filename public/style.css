@@ -406,3 +406,11 @@ body:not(.touch) .exam { left: auto; right: 16px; transform: none; width: min(42
 .xres { display: block; z-index: 22; }
 .xres[hidden] { display: none; }
 body.touch .xwait { top: 96px; font-size: 12px; }
+
+/* Sürətli yol (teleport) */
+.tp-panel { width: 300px; z-index: 21; }
+.tp-list { display: flex; flex-direction: column; gap: 5px; margin: 6px 0; }
+.tp-btn { text-align: left; padding: 8px 10px; background: #ffffff1f; color: #fff; font-size: 14px; display: flex; justify-content: space-between; }
+.tp-btn:hover { background: #ffd16633; }
+.tp-btn small { opacity: .6; }
+.death-tip { margin-top: 8px; font-size: 13px; opacity: .85; }

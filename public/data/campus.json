@@ -96,6 +96,18 @@
       "exam": { "min": 3, "max": 8, "time": 180, "questions": 5, "npcs": 9, "countdown": 10 }
     }
   ],
+  "teleports": [
+    { "id": "rect", "name": "🏛 Rektorluq — Kapital imtahanı", "x": 55.5, "z": -141.5 },
+    { "id": "plaza", "name": "⭐ Mərkəzi meydan", "x": 30, "z": -150 },
+    { "id": "football", "name": "⚽ Futbol meydançası", "x": 75, "z": 30 },
+    { "id": "court", "name": "🏐 Voleybol / basketbol", "x": 58, "z": -242 },
+    { "id": "gallows", "name": "⚖ Dar ağacı və çarmıx", "x": -84, "z": -130 },
+    { "id": "newbld", "name": "🏢 Yeni bina", "x": 2, "z": 15 },
+    { "id": "south", "name": "🏫 Cənub korpusu", "x": -6, "z": 250 },
+    { "id": "lang", "name": "🗣 Dillər korpusu", "x": 28, "z": 370 },
+    { "id": "econ", "name": "💼 İqtisadiyyat korpusu", "x": -212, "z": -140 },
+    { "id": "gate", "name": "🚪 Darvaza", "x": 0, "z": -272 }
+  ],
   "matches": [
     {
       "id": "football", "ball": "football", "title": "⚽ Futbol", "target": 3, "time": 180,

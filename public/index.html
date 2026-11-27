@@ -122,6 +122,11 @@
       <div id="mp-list"></div>
       <p class="tip">Rejimi seç (1v1 / 2v2) və komandaya qoşul. Hər iki komanda dolanda matç 5 saniyəyə başlayır. Qaliblərə +40 XP.</p>
     </div>
+    <div id="tp-panel" class="gpanel tp-panel" hidden>
+      <div class="gp-head"><b>🧭 Sürətli yol</b><button id="tp-close" class="icon" type="button" title="Bağla (Esc)">✕</button></div>
+      <div id="tp-list" class="tp-list"></div>
+      <p class="tip">Döyüşdə, matçda və imtahanda işləmir. Hər 10 saniyədə bir.</p>
+    </div>
     <div id="gallows-panel" class="gpanel" hidden>
       <div class="gp-head"><b id="gp-title">⚖ Dar ağacı</b><button id="gp-close" class="icon" type="button" title="Bağla (Esc)">✕</button></div>
       <div class="gp-title">Məhkumlar</div>
@@ -151,12 +156,13 @@
         <button type="button" class="tbtn s" data-act="fullscreen" aria-label="Tam ekran">⛶</button>
         <button type="button" class="tbtn s" data-key="KeyV" aria-label="Birinci şəxs">👁</button>
         <button type="button" class="tbtn s" data-key="KeyU" aria-label="Minimal">🧹</button>
+        <button type="button" class="tbtn s" data-key="KeyT" aria-label="Sürətli yol">🧭</button>
       </div>
     </div>
     <div class="rotate-hint">📱 Telefonu yan çevirin — daha rahat oynanır</div>
     <div id="look-hint" class="look-hint">🖱 Kameranı çevirmək üçün siçanı <b>basıb sürüşdür</b> və ya ekrana klikləyib kilidlə</div>
     <div class="help">
-      <b>WASD</b> gəz · <b>Shift</b> qaç · <b>Space</b> tullan · <b>Siçan</b> kamera · <b>Q/E</b> fırlat · <b>Təkər</b> zoom · <b>F</b> otur / topa vur · <b>Tab</b> liderlər · <b>G</b> silah · <b>Klik</b> vur · <b>R</b> doldur · <b>1-9</b> emosiya · <b>V</b> 1-ci şəxs · <b>M</b> xəritə · <b>P</b> foto · <b>U</b> minimal · <b>Enter</b> çat · <b>Esc</b> siçanı burax
+      <b>WASD</b> gəz · <b>Shift</b> qaç · <b>Space</b> tullan · <b>Siçan</b> kamera · <b>Q/E</b> fırlat · <b>Təkər</b> zoom · <b>F</b> otur / topa vur · <b>Tab</b> liderlər · <b>G</b> silah · <b>Klik</b> vur · <b>R</b> doldur · <b>1-9</b> emosiya · <b>V</b> 1-ci şəxs · <b>M</b> xəritə · <b>P</b> foto · <b>T</b> sürətli yol · <b>U</b> minimal · <b>Enter</b> çat · <b>Esc</b> siçanı burax
       <button type="button" id="help-close" class="help-close" title="Gizlət (H)">✕</button>
     </div>
     <div id="chat">
@@ -172,6 +178,7 @@
       <div class="death-title">💀 Məğlub oldun</div>
       <div id="death-by"></div>
       <div id="death-time"></div>
+      <div class="death-tip">🧭 Doğulandan sonra <b>T</b> — sürətli yol (Rektorluq və s.)</div>
     </div>
   </div>
   <!-- C# imtahanı (çoxoyunçulu kopya missiyası) -->
