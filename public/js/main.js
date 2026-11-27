@@ -84,6 +84,8 @@ Object.assign(window.__bmu, { player, others, cam, renderer, scene, camera });
 // telefonda: siçan kilidi yoxdur, keyfiyyət aşağı (istifadəçi ayarlarda dəyişə bilər)
 const settings = Object.assign({ sens: 1, invert: false, lock: !TOUCH, quality: TOUCH ? 'low' : 'high' }, JSON.parse(localStorage.getItem('bmu-settings') || '{}'));
 if (TOUCH) settings.lock = false;
+// köhnə versiya brauzer xətasında kilidi həmişəlik söndürüb yadda saxlayırdı — bir dəfəlik geri qaytarırıq
+if (!settings.lockFix) { settings.lock = !TOUCH; settings.lockFix = 1; localStorage.setItem('bmu-settings', JSON.stringify(settings)); }
 {
   const [size, area] = SHADOW[settings.quality] || SHADOW.high;
   sun.shadow.mapSize.set(size, size);
@@ -894,7 +896,8 @@ function endDrag(e) {
   sfx.init();
   if (settings.lock) {
     // ilk klik siçanı kilidləyir; kilidlənəndən sonra kliklər atəş açır
-    try { canvas.requestPointerLock()?.catch?.(() => {}); } catch { /* brauzer icazə vermir */ }
+    lockTries = 0;
+    requestLock();
   } else {
     attack(); // kilidsiz rejimdə sadə klik = atəş / yumruq
   }
@@ -914,13 +917,24 @@ const touchCtl = TOUCH ? initTouch({
   key: (code, down) => window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: KEY_NAMES[code] || code.replace(/^Key|^Digit/, '').toLowerCase() })),
 }) : null;
 
+// Siçan kilidi. Brauzer Esc-dən sonra ~1 saniyə yenidən kilidləməyə icazə vermir (pointerlockerror) —
+// əvvəllər bu xəta kilidi həmişəlik söndürürdü və kamera yalnız basıb sürüşdürməklə dönürdü.
+// İndi ayar dəyişmir: bir az gözləyib yenidən cəhd edirik.
+let lockTries = 0;
+function requestLock() {
+  if (state.mode !== 'game' || document.pointerLockElement === canvas) return;
+  try { canvas.requestPointerLock()?.catch?.(() => {}); } catch { /* brauzer icazə vermir */ }
+}
 document.addEventListener('pointerlockerror', () => {
-  // kilid alınmadısa, kilidsiz rejimə keç ki, klik atəş açsın
-  settings.lock = false;
-  $('set-lock').checked = false;
-  saveSettings();
-  toast('Brauzer siçan kilidinə icazə vermədi — klik atəş açır, sürüşdürmək kameranı çevirir.');
+  if (++lockTries <= 2) { setTimeout(requestLock, 1100); return; }
+  toast('Siçan kilidlənmədi — bir saniyə sonra ekrana yenidən klik et.');
 });
+function updateLockHint() {
+  const show = settings.lock && !TOUCH && state.mode === 'game' && document.pointerLockElement !== canvas;
+  $('lock-hint').hidden = !show;
+}
+document.addEventListener('pointerlockchange', updateLockHint);
+setInterval(updateLockHint, 500);
 canvas.addEventListener('wheel', (e) => {
   if (state.mode !== 'game') return;
   // tam yaxınlaşanda birinci şəxsə keçir, geri fırladanda üçüncü şəxsə qayıdır

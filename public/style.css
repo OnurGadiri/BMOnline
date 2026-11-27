@@ -414,3 +414,7 @@ body.touch .xwait { top: 96px; font-size: 12px; }
 .tp-btn:hover { background: #ffd16633; }
 .tp-btn small { opacity: .6; }
 .death-tip { margin-top: 8px; font-size: 13px; opacity: .85; }
+/* siçan kilidli deyilsə kiçik ipucu */
+.lock-hint { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); background: #000b; color: #fff; padding: 6px 12px; border-radius: 10px; font-size: 13px; pointer-events: none; z-index: 5; }
+.lock-hint[hidden] { display: none; }
+body.photo .lock-hint, body.minimal-ui .lock-hint { display: none; }
