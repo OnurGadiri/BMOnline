@@ -243,6 +243,20 @@ async function enter(name, pin = '1234') {
   await sleep(400);
   A.c.send({ t: 'kick', id: 'basket', v: [0, 100, 0] });
   ok('topun sürəti məhdudlaşdırılır (hiylə qorunması)', !(await bTooFast));
+  // dəqiq atış (klientin istifadə etdiyi basketAim) serverdə çənbər/lövhə fizikası ilə səbətə düşür
+  // yuxarı atılan top yerə düşüb dayansın (0.7 san ərzində hərəkət xəbəri gəlmirsə — dayanıb)
+  for (const until = Date.now() + 15000; Date.now() < until;) {
+    const mv = await A.c.waitT('balls', 700, (m) => { const r = m.b.find((x) => x[0] === 'basket'); return r && Math.hypot(r[4], r[5], r[6]) > 0.02; });
+    if (!mv) break;
+  }
+  const bNow = A.c.msgs.filter((m) => m.t === 'balls').pop().b.find((r) => r[0] === 'basket');
+  A.c.pos = await A.c.walkTo(A.c.pos, { x: bNow[1] - 0.8, z: bNow[3] }, 8.5);
+  await sleep(150);
+  const { basketAim } = require(path.join(__dirname, '..', 'public', 'js', 'ballphys.js'));
+  const hoopCfg = require(path.join(__dirname, '..', 'public', 'data', 'campus.json')).balls.find((b) => b.id === 'basket').hoop;
+  const made = A.c.waitT('score', 3500, (m) => m.kind === 'basket' && m.ball === 'basket');
+  A.c.send({ t: 'kick', id: 'basket', v: basketAim({ px: bNow[1], py: bNow[2], pz: bNow[3] }, hoopCfg, 0.5, () => 0.5).map((x) => +x.toFixed(3)) });
+  ok('dəqiq basketbol atışı serverdə səbət sayılır', (await made)?.by === 'Alfa', `top (${bNow[1].toFixed(1)}, ${bNow[3].toFixed(1)})`);
   // uzaqdakı futbol topuna vurmaq olmur
   const fb = A.c.waitT('balls', 800, (m) => { const r = m.b.find((x) => x[0] === 'football'); return r && Math.hypot(r[4], r[6]) > 1; });
   A.c.send({ t: 'kick', id: 'football', v: [10, 2, 0] });

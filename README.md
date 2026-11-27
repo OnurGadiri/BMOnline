@@ -87,7 +87,11 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   line from the pitch side, and it bounces off posts, nets and players' bodies instead of passing through them.
   Ball physics shared by the server and the client lives in `public/js/ballphys.js`.
 - **Basketball:** hold **F** next to the ball on the volleyball court and release in the middle of the
-  power bar to shoot at the hoop on the wall (+10 XP per basket).
+  power bar to shoot at the hoop on the wall (+10 XP per basket). The shot flies in a high arc (~45° entry);
+  too little power falls short onto the front rim, too much goes long off the backboard (bank shots can still go in).
+  The rim, the glass backboard and the net are physical: the ball bounces off the rim and board, slows down in the
+  net, and only counts when it drops through the hoop from above (a ball pushed up through it from below does not count).
+- **Balls hit each other:** balls on the same court (basketball and volleyball) collide, except a ball that is in a live match.
 - **Kapital Bank Room — C# exam cheating mission (multiplayer):** press **F** at the middle door of the
   rectorate to open the exam lobby, join a room or open a new one (**3–8 students** per room). The player who
   opened the room (👑 host) starts the exam with **▶ İmtahanı başlat** once at least 3 students have joined; after a
@@ -175,8 +179,10 @@ npm run test:map  # only the campus.json checks
 
 - `tests/map.test.js` checks NPC routes and roads against buildings, graph connectivity,
   objects placed on roads or inside buildings, and overlapping areas.
+- `tests/ball.test.js` checks the shared ball physics (`public/js/ballphys.js`): goals, goal nets and posts,
+  players' bodies, the basketball rim, backboard and shot accuracy, and ball-to-ball collisions.
 - `tests/protocol.test.js` starts its own server on port 3101 with a temporary data folder
-  (your `data/players.json` is never touched) and runs 35 multiplayer checks: login and
+  (your `data/players.json` is never touched) and runs 79 multiplayer checks: login and
   character validation, sync, chat, teleport guard, shooting, ammo, death and respawn,
   punching, the gallows, brute-force protection and session takeover.
 

@@ -49,7 +49,7 @@ function starGeometry() {
 }
 
 // Qapı çərçivəsi və oyunçu bədəni — serverlə ortaq fayl (ballphys.js, index.html-də adi skript kimi yüklənir)
-const { goalFrame, bodyHits, substeps } = globalThis.BallPhys;
+const { goalFrame, bodyHits, hoopFrame, ballPair, substeps, MASS } = globalThis.BallPhys;
 
 export class Play {
   constructor(scene, campus, sfx) {
@@ -105,6 +105,11 @@ export class Play {
     const pv = { x: prevX, y: prevY, z: prev };
     for (const g of c.goals || []) goalFrame(b, pv, g, Math.sign(g.z - c.z), c.r);
     if (bodies.length) bodyHits(b, pv, bodies, c.r);
+    if (c.hoop) {
+      // çənbər / lövhə: dəyəndə səs (metal və ya şüşə)
+      const hit = hoopFrame(b, pv, c.hoop, c.r, dt);
+      if (hit > 1.2) this.sfx.bounce(Math.max(0, 1 - Math.hypot(b.px - listenerPos.x, b.pz - listenerPos.z) / 40) * Math.min(1, hit / 7));
+    }
     if (b.py < c.r) {
       const hit = -b.vy;
       b.py = c.r;
@@ -141,11 +146,22 @@ export class Play {
     this.pending.delete(id);
   }
 
-  update(dt, t, playerPos, canCollect, send, bodiesFor = null) {
+  update(dt, t, playerPos, canCollect, send, bodiesFor = null, inMatch = null) {
     for (const b of this.balls.values()) {
       const bodies = bodiesFor ? bodiesFor(b) : [];
-      const n = substeps(b, dt);
+      const n = substeps(b, dt, b.cfg.r);
       for (let i = 0; i < n; i++) this.stepBall(b, dt / n, playerPos, bodies);
+    }
+    // toplar bir-birinə dəyir (serverdəki kimi; matçın topu istisnadır)
+    const list = [...this.balls.values()];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i], c = list[j];
+        if (inMatch && (inMatch(a) || inMatch(c))) continue;
+        ballPair(a, c, a.cfg.r, c.cfg.r, a.hold ? Infinity : MASS[a.cfg.kind] || 0.5, c.hold ? Infinity : MASS[c.cfg.kind] || 0.5);
+      }
+    }
+    for (const b of this.balls.values()) {
       const sp = Math.hypot(b.vx, b.vz);
       if (sp > 0.01 && b.py <= b.cfg.r + 0.02) {
         const axis = new THREE.Vector3(b.vz / sp, 0, -b.vx / sp);

@@ -1182,13 +1182,9 @@ function kickBall(b, p) {
     const d = 6 + 7 * p, T = 1.3 + 0.3 * p;
     v = [(fx * d) / T, (0.15 - b.py + 0.5 * BALL_G * T * T) / T, (fz * d) / T];
   } else if (b.cfg.kind === 'basketball') {
-    // halqaya parabola; güc zolağının ortası (p≈0.5) dəqiq atışdır
-    const h = b.cfg.hoop;
-    // simulyasiya ilə sınanıb: güc 0.44–0.56 aralığında demək olar həmişə səbət, 0.4/0.6-da ~35%
-    const dx = h.x - b.px, dz = h.z - b.pz, dy = h.y - b.py;
-    const T = 0.5 + Math.hypot(dx, dz) * 0.06;
-    const f = 0.97 + 0.06 * p + (Math.random() - 0.5) * 0.008;
-    v = [(dx / T) * f, ((dy + 0.5 * BALL_G * T * T) / T) * f, (dz / T) * f];
+    // halqaya ~45° ilə düşən qövs (ballphys.js); güc zolağının ortası (p≈0.5) dəqiq atışdır,
+    // az güc — qısa (ön çənbər), çox güc — uzun (lövhə / arxa çənbər)
+    v = globalThis.BallPhys.basketAim(b, b.cfg.hoop, p);
   } else {
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
     const sp = 6 + 16 * p;
@@ -1214,7 +1210,7 @@ function updateInteractions(dt) {
   $('charge').hidden = !inter.charging;
   $('charge-fill').style.width = `${inter.charge * 100}%`;
   $('charge').classList.toggle('basket', inter.ball?.cfg.kind === 'basketball');
-  play?.update(dt, clock.elapsedTime, player.pos, !player.dead && state.mode === 'game', send, ballBodies);
+  play?.update(dt, clock.elapsedTime, player.pos, !player.dead && state.mode === 'game', send, ballBodies, ballMatch);
 }
 // Topa dəyən bədənlər (klient proqnozu üçün, server də eyni qaydanı tətbiq edir):
 // matç gedirsə yalnız matç oyunçuları, vuran oyunçu 0.3 san nəzərə alınmır

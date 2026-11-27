@@ -790,20 +790,25 @@ export function buildWorld(scene, campus, quality = 'high') {
       g.strokeStyle = '#222'; g.lineWidth = 5; g.strokeRect(3, 3, w - 6, hh - 6);
       g.strokeRect(w / 2 - 30, hh - 50, 60, 42);
     });
+    // ölçülər fizika ilə eynidir (campus.json → balls.basket.hoop): lövhənin ön üzü divardan h.board, çənbərin mərkəzi h.rim qədər irəlidə
+    const bdz = h.board ?? 0.5, rdz = h.rim ?? 0.88;
     const board = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.05, 0.05), [lambert('#eee'), lambert('#eee'), lambert('#eee'), lambert('#eee'),
       new THREE.MeshLambertMaterial({ map: boardTex }), new THREE.MeshLambertMaterial({ map: boardTex })]);
-    board.position.set(h.x, 3.45, h.z + dir * 0.35);
+    board.position.set(h.x, 3.425, h.z + dir * (bdz - 0.025));
     scene.add(board);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.35), lambert('#555'));
-    arm.position.set(h.x, 3.45, h.z + dir * 0.17);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, bdz - 0.05), lambert('#555'));
+    arm.position.set(h.x, 3.45, h.z + dir * (bdz - 0.05) / 2);
     scene.add(arm);
+    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, rdz - 0.23 - bdz), lambert('#c94c18'));
+    bracket.position.set(h.x, 3.05, h.z + dir * (bdz + (rdz - 0.23 - bdz) / 2));
+    scene.add(bracket);
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.02, 6, 20), lambert('#e05a1f'));
     rim.rotation.x = Math.PI / 2;
-    rim.position.set(h.x, 3.05, h.z + dir * 0.62);
+    rim.position.set(h.x, 3.05, h.z + dir * rdz);
     scene.add(rim);
     const netCone = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.14, 0.4, 12, 1, true),
       new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
-    netCone.position.set(h.x, 2.84, h.z + dir * 0.62);
+    netCone.position.set(h.x, 2.84, h.z + dir * rdz);
     scene.add(netCone);
   }
 

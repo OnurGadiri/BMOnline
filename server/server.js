@@ -324,7 +324,7 @@ const balls = (CAMPUS.balls || []).map((b) => ({ ...b, px: b.x, py: b.r, pz: b.z
 const ballState = () => ({ t: 'balls', b: balls.map((b) => [b.id, ...[b.px, b.py, b.pz, b.vx, b.vy, b.vz].map((v) => +v.toFixed(3)), b.hold ? 1 : 0]) });
 
 // Qapı çərçivəsi, oyunçu bədəni və qol xətti — klientlə ortaq fayl (public/js/ballphys.js)
-const { goalFrame, bodyHits, goalCrossed, substeps } = require(path.join(PUBLIC, 'js', 'ballphys.js'));
+const { goalFrame, bodyHits, goalCrossed, hoopFrame, hoopCrossed, ballPair, substeps, MASS } = require(path.join(PUBLIC, 'js', 'ballphys.js'));
 
 function stepBall(b, dt, bodies = []) {
   if (b.hold) return; // voleybolda servis gözləyir — havada dayanır
@@ -355,13 +355,11 @@ function stepBall(b, dt, bodies = []) {
   for (const g of b.goals || []) {
     if (!b.resetAt && goalCrossed(b, prev, g, Math.sign(g.z - b.z), b.r)) score(b, 'goal', b.goals.indexOf(g));
   }
-  // səbət: top halqanın içindən aşağı düşür
+  // basketbol: çənbər, lövhə, tor; səbət — top halqanın içindən YUXARIDAN aşağı düşür (aşağıdan keçən sayılmır)
   const h = b.hoop;
-  if (h && prev.y > h.y && b.py <= h.y && !b.resetAt) {
-    // halqa müstəvisini keçdiyi dəqiq nöqtə (sürətli top bir addımda halqanı "atlamasın")
-    const k = (prev.y - h.y) / (prev.y - b.py);
-    const cx = prev.x + (b.px - prev.x) * k, cz = prev.z + (b.pz - prev.z) * k;
-    if (Math.hypot(cx - h.x, cz - h.z) < h.r) score(b, 'basket');
+  if (h) {
+    hoopFrame(b, prev, h, b.r, dt);
+    if (hoopCrossed(b, prev, h) && !b.resetAt) score(b, 'basket');
   }
   // divarlar / torlar
   const bd = b.bounds;
@@ -396,7 +394,7 @@ setInterval(() => {
   for (const b of balls) {
     if (b.resetAt && now > b.resetAt) {
       const sv = b.serve; // matçda voleybol: növbəti servisi vuran komandanın tərəfində havada dayanır
-      Object.assign(b, { px: sv ? sv.x : b.x, py: sv ? 1.9 : b.r + 0.5, pz: sv ? sv.z : b.z, vx: 0, vy: 0, vz: 0, resetAt: 0, hold: !!sv, serve: null, dirty: true });
+      Object.assign(b, { px: sv ? sv.x : b.x, py: sv ? 1.9 : b.r + 0.5, pz: sv ? sv.z : b.z, vx: 0, vy: 0, vz: 0, resetAt: 0, hold: !!sv, serve: null, hoopUp: 0, dirty: true });
       // qol/səbətdən sonra topu qol buraxan komanda başlayır
       const mt = b.kickoffSide && matchForBall(b);
       if (mt) startKickoff(mt, b, b.kickoffSide);
@@ -425,10 +423,19 @@ setInterval(() => {
       }
     }
     // sürətli top bir addımda dirəyi/oyunçunu "atlamasın" — kiçik addımlara bölünür
-    const n = substeps(b, dt);
+    const n = substeps(b, dt, b.r);
     for (let i = 0; i < n; i++) stepBall(b, dt / n, bodies);
   }
+  // eyni meydançadakı toplar bir-birinə dəyir (məs. basketbol və voleybol topu); matçın topuna kənar top toxunmur
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      const a = balls[i], c = balls[j];
+      if (a.resetAt || c.resetAt || ballInMatch(a) || ballInMatch(c)) continue;
+      if (ballPair(a, c, a.r, c.r, a.hold ? Infinity : MASS[a.kind] || 0.5, c.hold ? Infinity : MASS[c.kind] || 0.5)) a.dirty = c.dirty = true;
+    }
+  }
 }, 1000 / 30);
+const ballInMatch = (b) => matches.some((x) => (x.state === 'play' || x.state === 'count') && x.cfg.ball === b.id);
 
 /** Başlanğıc vuruşu: topa əvvəlcə yalnız bu komanda toxuna bilər (8 san və ya ilk toxunuşa qədər) */
 function startKickoff(mt, b, side) {
@@ -507,7 +514,7 @@ function resetMatchBall(mt, serveSide) {
     const s = serveSpot(b, serveSide);
     Object.assign(b, { px: s.x, py: 1.9, pz: s.z, hold: true });
   } else Object.assign(b, { px: b.x, py: b.r + 0.5, pz: b.z, hold: false });
-  Object.assign(b, { vx: 0, vy: 0, vz: 0, resetAt: 0, serve: null, lastKick: null, kickoff: null, kickoffSide: null, dirty: true });
+  Object.assign(b, { vx: 0, vy: 0, vz: 0, resetAt: 0, serve: null, lastKick: null, kickoff: null, kickoffSide: null, hoopUp: 0, dirty: true });
 }
 function joinMatch(ws, id, team, mode) {
   const mt = matchById(id), key = ws.key;
@@ -1235,6 +1242,7 @@ wss.on('connection', (ws, req) => {
       ws.lastKick = now;
       [b.vx, b.vy, b.vz] = v;
       b.hold = false;
+      b.hoopUp = 0; // yeni atış
       if (b.py < b.r + 0.05) b.py = b.r + 0.05;
       b.lastKick = e.key;
       b.kickAt = now;
