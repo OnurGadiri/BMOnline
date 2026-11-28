@@ -1,6 +1,6 @@
 // Kampus xəritəsi — public/data/campus.json əsasında qurulur
 import * as THREE from 'three';
-import { buildSky, buildClouds, addDecor } from './decor.js';
+import { buildSky, buildClouds, addDecor, addWind, WIND } from './decor.js';
 import { mergeStatic, mergeGroup } from './merge.js';
 
 const markDynamic = (o) => o.traverse((c) => { c.userData.dynamic = true; });
@@ -893,7 +893,7 @@ export function buildWorld(scene, campus, quality = 'high') {
     // Tüstüxananın ətrafı və girişi boş qalsın (kol/ağac girişin qabağını bağlamasın)
     (!!campus.smokeArea?.hut && Math.abs(x - campus.smokeArea.hut.x) < campus.smokeArea.hut.w / 2 + 2 + m && Math.abs(z - campus.smokeArea.hut.z) < campus.smokeArea.hut.d / 2 + 2 + m) ||
     circles.some((c) => Math.hypot(x - c.x, z - c.z) < c.r + m);
-  plantTrees(scene, campus, edges, blocked, circles, R);
+  plantTrees(scene, campus, edges, blocked, circles, R, quality);
 
   // --- Hərəkətsiz obyektləri birləşdir (çəkiliş sayı azalsın) ---
   const stats = mergeStatic(scene, scene.children.filter((c) => !before.has(c)));
@@ -902,10 +902,11 @@ export function buildWorld(scene, campus, quality = 'high') {
   // --- Səma, buludlar, kollar, çiçəklər, fənərlər, ot ---
   const sky = buildSky(scene);
   const updateClouds = buildClouds(scene, R);
-  addDecor(scene, campus, { colliders, circles, edges, blocked, hardAreas }, R, quality);
+  const decor = addDecor(scene, campus, { colliders, circles, edges, blocked, hardAreas }, R, quality) || {};
 
   const update = (t, dt = 0.016, cam = null) => {
     if (cam) sky.position.copy(cam.position);
+    WIND.value = t;
     updateClouds(dt);
     for (const flag of flags) {
       const pos = flag.geometry.attributes.position;
@@ -919,7 +920,7 @@ export function buildWorld(scene, campus, quality = 'high') {
     traffic?.(dt);
   };
 
-  return { colliders, circles, blockers, seats, bounds: b, update };
+  return { colliders, circles, blockers, seats, bounds: b, update, sky, cloudMat: updateClouds.mat, lampMat: decor.lampMat };
 }
 
 function segDist(x, z, e) {
@@ -1281,7 +1282,8 @@ function buildHighway(scene, hw, R) {
 
 // ======================= Ağaclar (instanced) =======================
 
-function plantTrees(scene, campus, edges, blocked, circles, R) {
+function plantTrees(scene, campus, edges, blocked, circles, R, quality = 'high') {
+  const windy = (m, amp) => (quality === 'low' ? m : addWind(m, 'whole', amp));
   const trunks = [], blobs = [], cones = [];
   const greens = ['#3f7d3a', '#4d8f42', '#5a9c4a', '#356f34', '#6aa84f'];
   const darks = ['#2f5a32', '#2c5030', '#365f36', '#28492b'];
@@ -1362,14 +1364,14 @@ function plantTrees(scene, campus, edges, blocked, circles, R) {
     tm.setMatrixAt(i, dummy.matrix);
   });
   const blobGeo = new THREE.IcosahedronGeometry(1, 1);
-  const bm = new THREE.InstancedMesh(blobGeo, new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), blobs.length);
+  const bm = new THREE.InstancedMesh(blobGeo, windy(new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), 0.09), blobs.length);
   blobs.forEach(([x, y, z, r, ry, c], i) => {
     dummy.position.set(x, y, z); dummy.scale.set(r, ry, r); dummy.rotation.set(0, (x * 7 + z) % 6, 0); dummy.updateMatrix();
     bm.setMatrixAt(i, dummy.matrix); bm.setColorAt(i, col.set(c));
   });
   const coneGeo = new THREE.ConeGeometry(1, 1, 7);
   coneGeo.translate(0, 0.5, 0);
-  const cm = new THREE.InstancedMesh(coneGeo, new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), cones.length);
+  const cm = new THREE.InstancedMesh(coneGeo, windy(new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), 0.06), cones.length);
   cones.forEach(([x, y, z, r, h, c], i) => {
     dummy.position.set(x, y, z); dummy.scale.set(r, h, r); dummy.rotation.set(0, (x * 3 + z) % 6, 0); dummy.updateMatrix();
     cm.setMatrixAt(i, dummy.matrix); cm.setColorAt(i, col.set(c));

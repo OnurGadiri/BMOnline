@@ -163,9 +163,11 @@ export class Play {
     }
     for (const b of this.balls.values()) {
       const sp = Math.hypot(b.vx, b.vz);
-      if (sp > 0.01 && b.py <= b.cfg.r + 0.02) {
+      if (sp > 0.01) {
+        // yerdə diyirlənir; havada da fırlanmağa davam edir (vurulanda verilən fırlanma), bir az zəif
         const axis = new THREE.Vector3(b.vz / sp, 0, -b.vx / sp);
-        b.mesh.rotateOnWorldAxis(axis, (sp * dt) / b.cfg.r);
+        const air = b.py > b.cfg.r + 0.02;
+        b.mesh.rotateOnWorldAxis(axis, ((sp * dt) / b.cfg.r) * (air ? 0.6 : 1));
       }
       b.mesh.position.set(b.px, b.py, b.pz);
     }

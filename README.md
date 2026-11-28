@@ -64,6 +64,13 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   towers, construction crane and highway traffic around the campus.
 - Stylized graphics: gradient sky with sun glow, drifting clouds, ACES tone mapping, soft shadows,
   paved paths with curbs, hedges, flower beds, street lamps, grass, detailed building facades.
+- **Time of day** (`public/js/daytime.js`): follows the real local time — morning, day, sunset and night blend into each
+  other (sun direction and colour, sky, fog, clouds); at sunset and night the street lamps light up. ⚙ Settings → *Günün vaxtı*
+  can fix it to morning, day, sunset or night.
+- **Game feel:** dust under your feet when sprinting and when you land, a short squash on landing and stretch on jumping
+  with a small camera shake, and balls keep spinning in the air. On *High* quality trees and grass sway in the wind
+  (in the shader, no CPU cost); *Low* keeps only the cheap effects.
+- **Sign-in screen:** the campus is built behind the sign-in card and the camera slowly flies over it.
 - Static NPCs defined in `campus.json` (e.g. Rəhman, who stands by the gallows with a speech bubble).
 
 ### Multiplayer
@@ -200,7 +207,7 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 | `Enter` | Chat |
 | `Esc` | Release the mouse / close panels |
 
-The ⚙ **Settings** panel has mouse sensitivity, invert Y, mouse-lock mode and graphics quality (High / Low).
+The ⚙ **Settings** panel has mouse sensitivity, invert Y, mouse-lock mode, graphics quality (High / Low) and the time of day.
 
 ### Mobile (phones and tablets)
 
@@ -245,6 +252,7 @@ public/js/decor.js        Sky, clouds, grass, hedges, flowers, street lamps, roc
 public/js/combat.js       Combat effects, sounds, health bars, aim raycasting
 public/js/minimap.js      Minimap and full campus map
 public/js/play.js         Balls (client-side prediction) and collectible stars
+public/js/daytime.js      Time of day: sun, sky, fog and street lamps for morning / day / sunset / night
 public/js/touch.js        Mobile touch controls (joystick, camera drag, on-screen buttons)
 public/js/merge.js        Merges static meshes into vertex-coloured batches (fewer draw calls)
 tests/                    Map validation and server protocol tests

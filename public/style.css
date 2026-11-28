@@ -472,3 +472,7 @@ button.danger { background: #c94c3f; color: #fff; }
 body.aiming .crosshair { transition: transform .12s ease-out; }
 body.aiming.spread-move .crosshair { transform: scale(1.7); }
 body.aiming.spread-air .crosshair { transform: scale(2.4); }
+
+/* Giriş ekranı: arxada kampus üzərində kamera uçuşu görünsün */
+body.flyover #login.screen { background: radial-gradient(circle at 30% 20%, #2a9d8f33, transparent 60%), #1b283840; }
+body.flyover #login .card { background: #22313fe8; backdrop-filter: blur(4px); }

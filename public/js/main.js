@@ -4,6 +4,7 @@ import { buildCharacter, animateRig, makeNameTag, setCharacterDefaults } from '.
 import { buildWorld, resolveCollisions, gallowsSlot, crucifixSlot } from './world.js';
 import { Creator } from './creator.js';
 import { SUN_DIR } from './decor.js';
+import { applyDaytime } from './daytime.js';
 import { makeSpeechBubble, makePistol, makeCigarette } from './character.js';
 import { Fx, sfx, makeHpBar, aimPoint } from './combat.js';
 import { Minimap } from './minimap.js';
@@ -50,7 +51,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color('#d8ecfb');
 scene.fog = new THREE.Fog('#c3def3', 180, 700);
 const camera = new THREE.PerspectiveCamera(62, 1, 0.25, 1500);
-scene.add(new THREE.HemisphereLight('#d6ebff', '#5f7d45', 1.25));
+const hemi = new THREE.HemisphereLight('#d6ebff', '#5f7d45', 1.25);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff0d4', 3.0);
 sun.castShadow = true;
 const SHADOW = { high: [4096, 60], low: [1024, 40] };
@@ -82,7 +84,7 @@ Object.assign(window.__bmu, { player, others, cam, renderer, scene, camera });
 
 // ---------- Ayarlar ----------
 // telefonda: siçan kilidi yoxdur, keyfiyyət aşağı (istifadəçi ayarlarda dəyişə bilər)
-const settings = Object.assign({ sens: 1, invert: false, lock: !TOUCH, quality: TOUCH ? 'low' : 'high' }, JSON.parse(localStorage.getItem('bmu-settings') || '{}'));
+const settings = Object.assign({ sens: 1, invert: false, lock: !TOUCH, quality: TOUCH ? 'low' : 'high', daytime: 'auto' }, JSON.parse(localStorage.getItem('bmu-settings') || '{}'));
 if (TOUCH) settings.lock = false;
 // köhnə versiya brauzer xətasında kilidi həmişəlik söndürüb yadda saxlayırdı — bir dəfəlik geri qaytarırıq
 if (!settings.lockFix) { settings.lock = !TOUCH; settings.lockFix = 1; localStorage.setItem('bmu-settings', JSON.stringify(settings)); }
@@ -121,6 +123,17 @@ $('set-sens').oninput = (e) => { settings.sens = +e.target.value; saveSettings()
 $('set-invert').onchange = (e) => { settings.invert = e.target.checked; saveSettings(); };
 $('set-lock').onchange = (e) => { settings.lock = e.target.checked; saveSettings(); };
 $('set-quality').value = settings.quality;
+$('set-daytime').value = settings.daytime || 'auto';
+$('set-daytime').onchange = (e) => { settings.daytime = e.target.value; saveSettings(); updateDaytime(true); };
+// günün vaxtı: işıqlar, səma, duman, fənərlər (real saatda hər 20 saniyədə yenilənir)
+let daytimeAt = 0;
+function updateDaytime(force = false) {
+  if (!world) return;
+  const now = performance.now();
+  if (!force && now - daytimeAt < 20000) return;
+  daytimeAt = now;
+  applyDaytime(settings.daytime || 'auto', { sun, hemi, scene, renderer, sunDir: SUN_DIR, sky: world.sky, cloudMat: world.cloudMat, lampMat: world.lampMat });
+}
 $('set-quality').onchange = (e) => { settings.quality = e.target.value; saveSettings(); toast('Səhifəni yeniləyəndə (F5) tətbiq olunacaq'); };
 
 // Foto rejimi: interfeysi gizlədir — gözəl skrinşot üçün
@@ -469,7 +482,7 @@ const smokeTex = (() => {
   return new THREE.CanvasTexture(c);
 })();
 const smokeFx = { pool: [], live: [] };
-function puff(pos, vx, vy, vz, size, life, alpha) {
+function puff(pos, vx, vy, vz, size, life, alpha, color = '#c9c9c9') {
   let sp = smokeFx.pool.pop();
   if (!sp) {
     if (smokeFx.live.length > 160) return;
@@ -479,6 +492,7 @@ function puff(pos, vx, vy, vz, size, life, alpha) {
   sp.userData = { vx, vy, vz, size, life, age: 0, alpha, ph: Math.random() * 6 };
   sp.scale.setScalar(size);
   sp.material.opacity = alpha;
+  sp.material.color.set(color);
   scene.add(sp);
   smokeFx.live.push(sp);
 }
@@ -497,6 +511,15 @@ function updateSmokeFx(dt) {
   }
 }
 const smokeV = new THREE.Vector3(), smokeF = new THREE.Vector3();
+/** ayaq altından qalxan toz (yerin rənginə yaxın) */
+const dustV = new THREE.Vector3();
+function dustBurst(p, n, power) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = (0.4 + Math.random() * 0.8) * power;
+    dustV.set(p.x + Math.cos(a) * 0.25, p.y + 0.08, p.z + Math.sin(a) * 0.25);
+    puff(dustV, Math.cos(a) * sp, 0.25 + Math.random() * 0.4, Math.sin(a) * sp, 0.24, 0.9 + Math.random() * 0.5, 0.5, '#9c8b6e');
+  }
+}
 /** Əldə siqaret (emosiya 14/15) və ondan çıxan tüstü; ağızdan vaxtaşırı tüstü buraxılır */
 function smokeHolder(h, emote, dt, near) {
   const want = (emote === 14 || emote === 15) && near && !!h.char;
@@ -808,8 +831,9 @@ creator.onCancel = () => { creator.close(); state.mode = 'game'; $('hud').hidden
 $('btn-customize').onclick = () => openCreator(false);
 
 // ---------- Oyuna giriş ----------
-function enterGame(m) {
-  if (!world) {
+function ensureWorld() {
+  if (world) return;
+  {
     world = buildWorld(scene, CAMPUS, settings.quality);
     play = new Play(scene, CAMPUS, sfx);
     window.__bmu.play = play;
@@ -829,6 +853,11 @@ function enterGame(m) {
     Object.assign(window.__bmu, { rooms, exam });
     updateBirds = buildBirds(scene, CAMPUS.spawn, LOW ? 9 : 18);
   }
+  updateDaytime(true);
+}
+function enterGame(m) {
+  ensureWorld();
+  document.body.classList.remove('flyover');
   state.myId = m.you.id;
   state.inGame = true;
   state.mode = 'game';
@@ -1237,6 +1266,7 @@ function backToLogin() {
   if (document.pointerLockElement) document.exitPointerLock();
   Object.assign(player, { sitting: null, emote: 0, smoking: false, safe: false, dead: false, weapon: 0 });
   if (player.char) attachGun(player, false);
+  if (player.char) player.char.root.visible = false; // giriş ekranında kampus uçuşunda görünməsin
   exam?.reset();
   if (gallows.open) closeGallowsPanel();
   closeMatchPanel();
@@ -1339,10 +1369,26 @@ function updatePlayer(dt) {
   { const sp = player.weapon !== 1 ? '' : !player.onGround ? 'air' : player.speed > 0.5 ? 'move' : '';
     if (sp !== frame.spread) { frame.spread = sp; document.body.classList.toggle('spread-move', sp === 'move'); document.body.classList.toggle('spread-air', sp === 'air'); } }
 
-  if (keys.has('Space') && player.onGround) { player.vy = 7; player.onGround = false; }
+  if (keys.has('Space') && player.onGround) { player.vy = 7; player.onGround = false; player.squash = -0.6; }
+  const wasAir = !player.onGround, fallV = player.vy;
   player.vy -= 20 * dt;
   player.pos.y += player.vy * dt;
   if (player.pos.y <= 0) { player.pos.y = 0; player.vy = 0; player.onGround = true; }
+  if (wasAir && player.onGround && fallV < -4) {
+    // yerə enmə: bədən bir anlıq yastılanır, toz qalxır, kamera azca silkələnir
+    const k = Math.min(1, -fallV / 11);
+    player.squash = 0.35 + k * 0.65;
+    shake(0.03 + k * 0.07);
+    dustBurst(player.pos, LOW ? 4 : 9, 0.6 + k);
+  }
+  player.squash = (player.squash || 0) * Math.max(0, 1 - dt * 9);
+  { const q = player.squash, s = q > 0 ? q : 0, st = q < 0 ? -q : 0;
+    player.char.root.scale.set(1 + s * 0.14 - st * 0.06, 1 - s * 0.2 + st * 0.12, 1 + s * 0.14 - st * 0.06); }
+  // qaçanda ayaqların altından toz
+  if (player.onGround && player.speed > 5.5) {
+    player.dustT = (player.dustT || 0) - dt;
+    if (player.dustT <= 0) { player.dustT = LOW ? 0.22 : 0.09; dustBurst(player.pos, 1, 0.4); }
+  }
   if (target > 0 || !player.onGround) player.emote = 0; // hərəkət emosiyanı dayandırır
 
   resolveCollisions(player.pos, 0.4, world);
@@ -1727,6 +1773,10 @@ function updateOthers(dt) {
     o.recoilT = Math.max(0, (o.recoilT || 0) - dt * 7);
     o.flinchT = Math.max(0, (o.flinchT || 0) - dt * 4);
     const v = Math.hypot(r.position.x - bx, r.position.z - bz) / Math.max(dt, 1e-3);
+    if (!LOW && v > 5.5 && r.position.y < 0.05 && r.position.distanceToSquared(camera.position) < 900) {
+      o.dustT = (o.dustT || 0) - dt;
+      if (o.dustT <= 0) { o.dustT = 0.12; dustBurst(r.position, 1, 0.4); }
+    }
     // LOD: uzaqdakı personajlar gizlənir, orta məsafədəkilər daha seyrək animasiya olunur
     const d2 = r.position.distanceToSquared(camera.position);
     const far = LOD.hide * LOD.hide;
@@ -1773,10 +1823,12 @@ function frame(dt) {
     return;
   }
   if (!state.inGame || !world) {
+    if (world && state.mode === 'login') { flyover(dt); return; }
     renderer.setClearColor('#1b2838');
     renderer.clear();
     return;
   }
+  updateDaytime();
   updatePlayer(dt);
   updateSmoking(dt);
   updateOthers(dt);
@@ -1806,5 +1858,30 @@ function frame(dt) {
   renderer.render(scene, camera);
 }
 
+// ---------- Giriş ekranı: kampusun üzərində yavaş kamera uçuşu ----------
+const fly = { t: Math.random() * 100 };
+function flyover(dt) {
+  document.body.classList.add('flyover');
+  updateDaytime();
+  fly.t += dt;
+  // Rektorluq, meydan və futbol meydançası arasında geniş, yavaş dairə
+  const cx = 25, cz = -90, a = fly.t * 0.035;
+  const r = 150 + Math.sin(fly.t * 0.05) * 30;
+  camera.position.set(cx + Math.cos(a) * r, 55 + Math.sin(fly.t * 0.07) * 12, cz + Math.sin(a) * r);
+  camera.lookAt(cx + Math.cos(a + 0.9) * 25, 6, cz + Math.sin(a + 0.9) * 25);
+  camera.aspect = canvas.clientWidth / canvas.clientHeight;
+  camera.updateProjectionMatrix();
+  sun.position.set(cx, 0, cz).addScaledVector(SUN_DIR, 120);
+  sun.target.position.set(cx, 0, cz);
+  world.update(clock.elapsedTime, dt, camera);
+  updateBirds?.(clock.elapsedTime, dt);
+  updateStaticNpcs(dt, clock.elapsedTime);
+  play?.update(dt, clock.elapsedTime, camera.position, false, () => {});
+  if (LOW) sun.shadow.needsUpdate = perf.frame++ % 2 === 0;
+  renderer.render(scene, camera);
+}
+
 connect();
 loop();
+// dünya səhifə açılan kimi (giriş ekranının arxasında) qurulur
+setTimeout(() => { if (!world) { try { ensureWorld(); } catch (e) { console.error(e); } } }, 60);

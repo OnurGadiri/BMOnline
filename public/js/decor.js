@@ -4,6 +4,27 @@ import { bakeGeometry, mergeGeometries } from './merge.js';
 
 export const SUN_DIR = new THREE.Vector3(0.45, 0.72, 0.28).normalize();
 
+// ---- Külək: ağac taclarında və otda yırğalanma (yalnız "Yüksək" keyfiyyətdə; shader-də, CPU-ya yük yoxdur) ----
+export const WIND = { value: 0 };
+/** mode 'height' — yerdən hündürlüyə görə (ot), 'whole' — bütöv yırğalanma (ağac tacı); amp — metr */
+export function addWind(mat, mode = 'height', amp = 0.08) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uWindT = WIND;
+    sh.vertexShader = 'uniform float uWindT;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        vec3 wPos = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+      #else
+        vec3 wPos = vec3(0.0);
+      #endif
+      float wK = ${mode === 'height' ? 'max(transformed.y, 0.0) * 4.0' : '1.0'};
+      float wS = sin(uWindT * 1.6 + wPos.x * 0.13 + wPos.z * 0.09) + 0.35 * sin(uWindT * 3.7 + wPos.x * 0.7);
+      transformed.x += wS * ${amp.toFixed(3)} * wK;
+      transformed.z += cos(uWindT * 1.2 + wPos.z * 0.11) * ${(amp * 0.6).toFixed(3)} * wK;`);
+  };
+  mat.customProgramCacheKey = () => `wind-${mode}-${amp}`;
+  return mat;
+}
+
 /** Qradiyentli səma + günəş parıltısı. Hər kadrda kameranın mövqeyinə köçürülür. */
 export function buildSky(scene) {
   const mat = new THREE.ShaderMaterial({
@@ -14,6 +35,7 @@ export function buildSky(scene) {
       horizon: { value: new THREE.Color('#bcdcf5') },
       bottom: { value: new THREE.Color('#c4dcee') },
       sunDir: { value: SUN_DIR },
+      glow: { value: 1 },
     },
     vertexShader: /* glsl */`
       varying vec3 vDir;
@@ -22,14 +44,14 @@ export function buildSky(scene) {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: /* glsl */`
-      uniform vec3 top; uniform vec3 horizon; uniform vec3 bottom; uniform vec3 sunDir;
+      uniform vec3 top; uniform vec3 horizon; uniform vec3 bottom; uniform vec3 sunDir; uniform float glow;
       varying vec3 vDir;
       void main() {
         vec3 d = normalize(vDir);
         float h = d.y;
         vec3 c = h > 0.0 ? mix(horizon, top, pow(h, 0.38)) : mix(horizon, bottom, min(1.0, -h * 4.0));
         float s = max(dot(d, sunDir), 0.0);
-        c += vec3(1.0, 0.9, 0.7) * (pow(s, 900.0) * 3.0 + pow(s, 40.0) * 0.35 + pow(s, 6.0) * 0.12);
+        c += vec3(1.0, 0.9, 0.7) * (pow(s, 900.0) * 3.0 + (pow(s, 40.0) * 0.35 + pow(s, 6.0) * 0.12) * glow);
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -70,12 +92,14 @@ export function buildClouds(scene, R) {
     clouds.push(c);
   }
   scene.add(group);
-  return (dt) => {
+  const update = (dt) => {
     for (const c of clouds) {
       c.position.x += c.userData.speed * dt;
       if (c.position.x > 650) c.position.x = -650;
     }
   };
+  update.mat = mat;
+  return update;
 }
 
 /**
@@ -215,7 +239,7 @@ export function addDecor(scene, campus, ctx, R, quality) {
     const count = 26000;
     const tuftGeo = new THREE.ConeGeometry(0.045, 0.26, 3);
     tuftGeo.translate(0, 0.13, 0);
-    const tufts = new THREE.InstancedMesh(tuftGeo, new THREE.MeshLambertMaterial({ color: '#ffffff' }), count);
+    const tufts = new THREE.InstancedMesh(tuftGeo, addWind(new THREE.MeshLambertMaterial({ color: '#ffffff' }), 'height', 0.09), count);
     const grassCols = ['#6fa85a', '#7fb069', '#5e9a4c', '#8cbf6e', '#9aa565', '#8a9a55'];
     let n = 0;
     for (let tries = 0; tries < count * 3 && n < count; tries++) {
@@ -252,6 +276,7 @@ export function addDecor(scene, campus, ctx, R, quality) {
   rocks.count = rn;
   rocks.castShadow = rocks.receiveShadow = true;
   scene.add(rocks);
+  return { lampMat: heads.material };
 }
 
 function segDist(x, z, e) {
