@@ -1162,7 +1162,12 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   if (state.mode !== 'game') return;
-  if (document.pointerLockElement === canvas) { rotateCamera(e.movementX, e.movementY); return; }
+  if (document.pointerLockElement === canvas) {
+    // Chrome-da kilidli siçan bəzən bir hadisədə nəhəng sıçrayış verir (kamera bir anda fırlanır) — belələrini at
+    if (Math.abs(e.movementX) > 220 || Math.abs(e.movementY) > 220) return;
+    rotateCamera(e.movementX, e.movementY);
+    return;
+  }
   if (!drag || drag.id !== e.pointerId) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   drag.x = e.clientX; drag.y = e.clientY;
@@ -1383,17 +1388,20 @@ function updatePlayer(dt) {
   { const sp = player.weapon !== 1 ? '' : !player.onGround ? 'air' : player.speed > 0.5 ? 'move' : '';
     if (sp !== frame.spread) { frame.spread = sp; document.body.classList.toggle('spread-move', sp === 'move'); document.body.classList.toggle('spread-air', sp === 'air'); } }
 
-  if (keys.has('Space') && player.onGround) { player.vy = 7; player.onGround = false; player.squash = -0.6; }
+  if (keys.has('Space') && player.onGround) { player.vy = 7; player.onGround = false; }
   const wasAir = !player.onGround, fallV = player.vy;
   player.vy -= 20 * dt;
   player.pos.y += player.vy * dt;
   if (player.pos.y <= 0) { player.pos.y = 0; player.vy = 0; player.onGround = true; }
   if (wasAir && player.onGround && fallV < -4) {
-    // yerə enmə: bədən bir anlıq yastılanır, toz qalxır, kamera azca silkələnir
-    const k = Math.min(1, -fallV / 11);
-    player.squash = 0.35 + k * 0.65;
-    shake(0.03 + k * 0.07);
-    dustBurst(player.pos, LOW ? 4 : 9, 0.6 + k);
+    // adi tullanma (Space basılı yeriş də) axıcı qalsın: yalnız yüngül toz.
+    // hündürdən düşəndə (adi tullanmadan sürətli) — bədən bir anlıq yastılanır və kamera azca silkələnir
+    if (fallV < -8.5) {
+      const k = Math.min(1, (-fallV - 8.5) / 8);
+      player.squash = 0.3 + k * 0.5;
+      shake(0.03 + k * 0.06);
+      dustBurst(player.pos, LOW ? 4 : 9, 0.6 + k);
+    } else if (!keys.has('Space')) dustBurst(player.pos, LOW ? 2 : 4, 0.5);
   }
   player.squash = (player.squash || 0) * Math.max(0, 1 - dt * 9);
   { const q = player.squash, s = q > 0 ? q : 0, st = q < 0 ? -q : 0;
