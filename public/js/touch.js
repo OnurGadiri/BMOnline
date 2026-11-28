@@ -19,7 +19,7 @@ export function initTouch(opts) {
   ui.hidden = false;
   const stick = document.getElementById('stick');
   const knob = document.getElementById('stick-knob');
-  const R = 56; // joystikin radiusu (px)
+  const R = 50; // joystikin radiusu (px) — kiçik radius: az hərəkətlə tam sürət
   let stickId = null, sx = 0, sy = 0;
   let camId = null, cx = 0, cy = 0;
 
@@ -60,14 +60,22 @@ export function initTouch(opts) {
       if (t.identifier === stickId) {
         let dx = t.clientX - sx, dy = t.clientY - sy;
         const d = Math.hypot(dx, dy);
-        if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
+        // barmaq çox uzaqlaşanda joystikin özü də arxasınca gəlir (barmaq qaldırmadan istiqamət dəyişmək asandır)
+        if (d > R * 1.6) {
+          const k = (d - R * 1.6) / d;
+          sx += dx * k; sy += dy * k;
+          placeStick(sx, sy);
+          dx = t.clientX - sx; dy = t.clientY - sy;
+        }
+        if (d > R) { const dd = Math.hypot(dx, dy); dx = (dx / dd) * R; dy = (dy / dd) * R; }
         knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
         touchInput.mx = dx / R;
         touchInput.my = dy / R;
-        touchInput.sprint = d > R * 0.95; // kənara qədər itələyəndə qaçış
+        touchInput.sprint = d > R * 0.92; // kənara qədər itələyəndə qaçış
         stick.classList.toggle('sprint', touchInput.sprint);
       } else if (t.identifier === camId) {
-        opts.rotateCamera((t.clientX - cx) * 1.5, (t.clientY - cy) * 1.5);
+        const k = 1.5 * Math.max(1, 640 / Math.min(window.innerWidth, window.innerHeight)) ** 0.5;
+        opts.rotateCamera((t.clientX - cx) * k, (t.clientY - cy) * k);
         cx = t.clientX; cy = t.clientY;
       }
     }
@@ -98,7 +106,7 @@ export function initTouch(opts) {
       else if (act === 'fullscreen') {
         const el = document.documentElement;
         if (!document.fullscreenElement) {
-          el.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {});
+          el.requestFullscreen?.().catch(() => {}); // istiqamət kilidlənmir — şaquli rejim də dəstəklənir
         } else document.exitFullscreen?.();
       }
     };

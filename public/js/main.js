@@ -112,6 +112,20 @@ function adaptResolution(rawDt) {
   if (perf.slowFor >= 2) { next = Math.max(0.6, dpr - 0.15); perf.slowFor = 0; }
   else if (perf.fastFor >= 4) { next = Math.min(DPR_MAX, dpr + 0.1); perf.fastFor = 0; }
   if (Math.abs(next - dpr) > 0.01) { dpr = next; renderer.setPixelRatio(dpr); resize(); }
+  // avtomatik keyfiyyət: sıxlıq artıq minimumdadırsa və hələ də yavaşdırsa — kölgələr və uzaq personajlar söndürülür
+  if (dpr <= 0.61 && fps < 32) {
+    perf.lowFor = (perf.lowFor || 0) + 1;
+    if (perf.lowFor >= 3 && sun.castShadow) {
+      sun.castShadow = false;
+      LOD.hide = Math.round(LOD.hide * 0.7); LOD.slow = Math.round(LOD.slow * 0.7);
+      perf.autoLow = true;
+      toast('⚡ Cihaz yavaşdır — kölgələr söndürüldü (daha axıcı oyun üçün)');
+    }
+  } else perf.lowFor = 0;
+  if (perf.autoLow && fps > 55 && dpr >= DPR_MAX - 0.01) {
+    perf.highFor = (perf.highFor || 0) + 1;
+    if (perf.highFor >= 10) { perf.autoLow = false; perf.highFor = 0; sun.castShadow = true; }
+  } else perf.highFor = 0;
   window.__bmu.fps = Math.round(fps); window.__bmu.dpr = dpr;
   if (settings.fps) $('fps').textContent = `${Math.round(fps)} FPS · ${dpr.toFixed(2)}x`;
 }
@@ -1513,11 +1527,25 @@ function kickBall(b, p) {
   player.ry = Math.atan2(v[0], v[2]);
   sfx.kick(1);
 }
+// mobil: F düyməsi indiki interaksiyanın ikonunu göstərir, iş yoxdursa solğun olur; 🛡 açıqdırsa yaşıl
+const F_ICONS = { sit: '🪑', stand: '⬆', match: '🏟', xdoor: '📝', xexit: '🚪' };
+function updateTouchContext(it) {
+  const f = document.getElementById('tbtn-f');
+  if (!f) return;
+  let icon = 'F';
+  if (it?.kind === 'ball') icon = { basketball: '🏀', volleyball: '🏐' }[it.ball.cfg.kind] || '⚽';
+  else if (it) icon = F_ICONS[it.kind] || 'F';
+  else if (nearGallows() || gallows.open) icon = '⚖';
+  if (f.dataset.icon !== icon) { f.dataset.icon = icon; f.textContent = icon; }
+  f.classList.toggle('idle', icon === 'F');
+  document.getElementById('tbtn-safe')?.classList.toggle('on', !!player.safe);
+}
 function updateInteractions(dt) {
   inter.current = inter.charging ? inter.current : findInteraction();
   const it = inter.current;
   const p = $('iprompt');
   p.hidden = !it || gallows.open || nearGallows();
+  if (TOUCH) updateTouchContext(it);
   if (it) p.innerHTML = `<b>F</b> ${it.label}`;
   if (inter.charging) {
     inter.charge = Math.min(1, inter.charge + dt / 1.1);
@@ -1706,6 +1734,10 @@ const eyePos = new THREE.Vector3();
 const fpTarget = new THREE.Vector3();
 let fpInit = false;
 function updateCamera(dt) {
+  // telefon şaquli tutulanda üfüqi görüş çox daralır — şaquli bucağı genişləndir
+  { const portrait = canvas.clientHeight > canvas.clientWidth * 1.15;
+    const fov = portrait ? 80 : 62;
+    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); } }
   // Birinci şəxs: kamera başın içində, baxış istiqaməti kameranın yaw/pitch-i ilə
   if (cam.fp && !player.dead && player.char) {
     player.char.root.updateMatrixWorld(true);

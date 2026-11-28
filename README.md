@@ -211,13 +211,20 @@ The ⚙ **Settings** panel has mouse sensitivity, invert Y, mouse-lock mode, gra
 
 ### Mobile (phones and tablets)
 
-Touch controls appear automatically on phones and tablets (landscape is recommended):
+Touch controls appear automatically on phones and tablets, in **portrait and landscape** (portrait widens the camera's
+field of view; fullscreen no longer forces landscape):
 
-- **Left side:** virtual joystick — push to the edge to sprint.
-- **Right side:** drag anywhere to turn the camera.
-- **Buttons:** 👊/🔫 attack, ⤒ jump, **F** interact (hold to charge kicks and shots), ⇄ switch weapon, ⟳ reload.
-- **Top bar:** 💬 chat, 🗺 map, 🏆 leaderboard (hold), 👕 character, 😀 emotes, 📸 photo mode (double-tap to exit), ⛶ fullscreen.
+- **Left side:** virtual joystick — push to the edge to sprint; if your thumb slides far, the joystick follows it.
+- **Right side:** drag anywhere to turn the camera (sensitivity adapts to the screen size).
+- **Buttons:** 👊/🔫 attack, ⤒ jump, ⇄ switch weapon, ⟳ reload, 🛡 safe mode (green when on), and **F** — a context
+  button that shows what it will do (🪑 sit, ⚽/🏀/🏐 ball, 🏟 match, 📝 exam, 🚪 exit, ⚖ gallows) and is dimmed when
+  there is nothing to do. 🚬 appears at Tüstüxana.
+- **☰ menu:** 💬 chat, 🗺 map, 🏆 leaderboard (hold), 👕 character, 😀 emotes, 📸 photo mode (double-tap to exit), ⛶ fullscreen,
+  👁 first person, 🧹 minimal UI, 🧭 fast travel, 🛡 safe mode, 🚪 logout.
 - The character creator becomes a bottom sheet (portrait) or a side panel (landscape); graphics default to Low.
+- **Automatic quality:** the pixel density drops when the frame rate is low; if it is still slow at the minimum, shadows
+  and distant characters are switched off (and come back when the game runs smoothly again).
+- Panels (fast travel, match, exam lobby, exam questions, leaderboard) and the sign-in / register screens fit small screens.
 - Add `?touch=1` to the URL to try the touch controls on a computer (`?touch=0` forces mouse controls).
 
 ## Tests
