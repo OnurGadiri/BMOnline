@@ -12,7 +12,8 @@ const PORT = 3101;
 const URL = `ws://localhost:${PORT}`;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmu-test-'));
 const server = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'server.js')], {
-  env: { ...process.env, PORT: String(PORT), BMU_DATA_DIR: dataDir },
+  // NPC davranışları testdə qəti olsun: yaxında skamya / Tüstüxana varsa həmişə ora gedir, topa vurmur (top testlərinə mane olmasın)
+  env: { ...process.env, PORT: String(PORT), BMU_DATA_DIR: dataDir, BMU_NPC: JSON.stringify({ sitChance: 1, smokeChance: 1, kickChance: 0 }) },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 const serverReady = new Promise((res) => server.stdout.on('data', (d) => { if (String(d).includes('işləyir')) res(); }));
@@ -684,6 +685,56 @@ async function enter(name, pin = '1234', existing = false) {
     ok('güllə binadan keçmir (arada Rektorluq)', !(await wall) && !!sb && sb.hit === false && sb.h[0] < 61, sb ? `güllə x=${sb.h[0]}-də dayandı` : '');
     S.c.close(); T.c.close();
     await sleep(300);
+  }
+
+  // --- 8i. NPC-lər: skamyada oturur, Tüstüxanada siqaret çəkir ---
+  {
+    const C = require(path.join(__dirname, '..', 'public', 'data', 'campus.json'));
+    const seatOf = (b) => ({ x: b[0] + Math.sin(b[2]) * 0.08, z: b[1] + Math.cos(b[2]) * 0.08 });
+    const benchA = C.plazaDecor.benches.find((b) => b[0] === 22 && b[1] === -124), benchB = C.plazaDecor.benches.find((b) => b[0] === 40 && b[1] === -124);
+    const tpTo = async (P, id) => {
+      for (let i = 0; i < 3; i++) {
+        const c = P.c.waitT('correct', 2000), er = P.c.waitT('tpErr', 2000);
+        P.c.send({ t: 'tp', id });
+        const got = await Promise.race([c, er]);
+        if (got?.t === 'correct') { P.c.pos = { x: got.x, z: got.z }; return; }
+        await sleep(10500);
+      }
+    };
+    const npcRow = (key) => A.c.waitT('snap', 1500, (m) => m.e.some((r) => r[0] === key)).then((m) => m?.e.find((r) => r[0] === key));
+    const waitRow = async (key, pred, ms) => {
+      for (const until = Date.now() + ms; Date.now() < until;) { const r = await npcRow(key); if (r && pred(r)) return r; }
+      return null;
+    };
+    const S = await enter('Gamma', '1234', true), T = await enter('Epsilon', '1234', true), U = await enter('Delta', '1234', true);
+    await Promise.all([tpTo(S, 'plaza'), tpTo(T, 'plaza'), tpTo(U, 'smoke')]);
+    // 1) skamyada oturan oyunçu çıxır — NPC-si oturmağa davam edir
+    const sa = seatOf(benchA);
+    S.c.pos = await S.c.walkTo(S.c.pos, sa, 8.5);
+    S.c.send({ t: 'pos', x: sa.x, y: 0, z: sa.z, ry: benchA[2], m: 0, e: 5, w: 0 });
+    await sleep(300);
+    S.c.send({ t: 'logout' });
+    await S.c.waitT('loggedOut', 2000);
+    await sleep(1500);
+    const rs = await npcRow('gamma');
+    ok('skamyada oturan oyunçu çıxanda NPC-si oturmağa davam edir', !!rs && rs[6] === 5 && Math.hypot(rs[1] - sa.x, rs[3] - sa.z) < 0.2, rs ? `emosiya ${rs[6]}` : '');
+    // 2) NPC boş skamyaya özü gedib oturur
+    const sb = seatOf(benchB);
+    T.c.pos = await T.c.walkTo(T.c.pos, { x: sb.x, z: sb.z - 3 }, 8.5);
+    await sleep(200);
+    T.c.send({ t: 'logout' });
+    await T.c.waitT('loggedOut', 2000);
+    const rt = await waitRow('epsilon', (r) => r[6] === 5, 12000);
+    ok('NPC yaxındakı boş skamyaya özü gedib oturur', !!rt && Math.hypot(rt[1] - sb.x, rt[3] - sb.z) < 0.2, rt ? `(${rt[1]}, ${rt[3]})` : 'oturmadı');
+    ok('Tüstüxanadan uzaqda oturan NPC siqaret çəkmir', !!rt && rt[6] !== 15);
+    // 3) Tüstüxanaya yaxın NPC ora gedib siqaret çəkir — yalnız zonanın içində
+    const z = C.smokeArea.zone;
+    U.c.send({ t: 'logout' });
+    await U.c.waitT('loggedOut', 2000);
+    const ru = await waitRow('delta', (r) => r[6] === 14 || r[6] === 15, 15000);
+    ok('NPC Tüstüxanada siqaret çəkir (zonanın içində)', !!ru && Math.hypot(ru[1] - z.x, ru[3] - z.z) < z.r, ru ? `(${ru[1]}, ${ru[3]}) emosiya ${ru[6]}` : 'çəkmədi');
+    S.c.close(); T.c.close(); U.c.close();
+    await sleep(200);
   }
 
   // --- 9. Eyni hesabla ikinci giriş, çıxış → NPC ---

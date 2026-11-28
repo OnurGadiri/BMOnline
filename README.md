@@ -70,7 +70,12 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
 - Real-time movement sync over WebSockets (10 Hz snapshots with client-side interpolation).
 - Chat, join / leave messages, kill feed.
 - **Offline characters become NPCs** that walk the campus paths, pause, wave and dance —
-  and you resume from wherever your NPC was when you log back in.
+  and you resume from wherever your NPC was when you log back in. NPCs are busy (server-side, tuning in the `NPC` object):
+  they sit on free benches, go to Tüstüxana to smoke (only inside its area), chat with nearby NPCs (short fictional
+  speech bubbles), wave at players walking past, kick the football now and then when no match is on, and pick routes by the
+  time of day (classes in the morning, the plaza at noon, the pitches and Tüstüxana in the evening). A player who logs out
+  while sitting or smoking leaves an NPC that keeps doing it. NPCs far from every player are updated less often.
+  Static NPCs turn to face you and wave when you come close.
 - Emotes: wave, dance, cheer (visible to everyone).
 
 ### Combat
@@ -216,7 +221,7 @@ npm run test:map  # only the campus.json checks
 - `tests/ball.test.js` checks the shared ball physics (`public/js/ballphys.js`): goals, goal nets and posts,
   players' bodies, the basketball rim, backboard and shot accuracy, and ball-to-ball collisions.
 - `tests/protocol.test.js` starts its own server on port 3101 with a temporary data folder
-  (your `data/players.json` is never touched) and runs 119 multiplayer checks: login, register, logout and
+  (your `data/players.json` is never touched) and runs 123 multiplayer checks: login, register, logout and
   character validation, sync, chat, teleport guard, shooting, ammo, death and respawn,
   punching, the gallows, brute-force protection and session takeover.
 

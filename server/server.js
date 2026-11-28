@@ -125,26 +125,242 @@ function addXp(key, amount) {
   scheduleSave();
 }
 
-function startAI(e) {
-  // Ən yaxın, birbaşa gedilə bilən nöqtəni tap
+// ---------- NPC davranışları (oflayn oyunçuların xarakterləri) ----------
+// Rejimlər: walk (marşrut nöqtələri arasında), goto (skamyaya / Tüstüxanaya / topa gedir), sit, smoke, wave.
+// Ehtimallar NPC obyektindədir; testlər üçün BMU_NPC mühit dəyişəni ilə (JSON) dəyişdirilə bilər.
+const NPC = Object.assign({
+  sitChance: 0.3, sitRange: 14, sitTime: [15, 35],
+  smokeChance: 0.45, smokeRange: 45, smokeTime: [20, 40],
+  chatRange: 5, chatEvery: 9,
+  waveRange: 4.5, waveCooldown: 40,
+  kickChance: 0.3, kickRange: 18, kickCooldown: 6,
+  farLod: 150, // ən yaxın oyunçudan bu qədər uzaqdırsa — seyrək yenilənir, sosial davranış yoxdur
+}, (() => { try { return JSON.parse(process.env.BMU_NPC || '{}'); } catch { return {}; } })());
+const rnd = (a, b) => a + Math.random() * (b - a);
+// uydurma, ümumi kampus söhbəti (real şəxslərin adı yoxdur)
+const NPC_LINES = [
+  'İmtahan necə keçdi?', 'Kafeyə gedək?', 'Bu gün dərs neçədədir?', 'C# çətin deyil, sadəcə öyrəşmək lazımdır.',
+  'Futbola gəlirsən?', 'Ev tapşırığını etmisən?', 'Hava əladır bu gün!', 'Kitabxanada yer var?',
+  'Sabah seminar var.', 'LINQ-i başa düşdün?', 'Avtobus gecikdi yenə…', 'Qrupda kim məruzə edir?',
+  'Matça qoşulaq?', 'Bu semestr çox sürətli keçir.', 'Çay içək?', 'Layihəni bitirdin?',
+];
+
+// oturmaq olar yerlər: meydan skamyaları, Tüstüxananın çöldəki skamyası, pavilyonlar (klientdəki makeBench ilə eyni nöqtə)
+const SEATS = [];
+{
+  const add = (x, z, ry) => SEATS.push({ x: x + Math.sin(ry) * 0.08, z: z + Math.cos(ry) * 0.08, ry, by: null });
+  for (const [x, z, ry] of CAMPUS.plazaDecor?.benches || []) add(x, z, ry);
+  const sa = CAMPUS.smokeArea;
+  if (sa?.outside?.bench) add(sa.outside.bench[0], sa.outside.bench[1], sa.outside.bench[2] || 0);
+  for (const g of sa?.gazebos || []) { add(g.x - 1.25, g.z, Math.PI / 2); add(g.x + 1.25, g.z, -Math.PI / 2); }
+}
+// NPC-nin düz xətlə keçə bilmədiyi kiçik tikililər (binalardan başqa): Tüstüxana, köşklər
+const NPC_OBST = [];
+{
+  const sa = CAMPUS.smokeArea;
+  if (sa?.hut) NPC_OBST.push({ x: sa.hut.x, z: sa.hut.z, w: sa.hut.w, d: sa.hut.d });
+  for (const k of sa?.kiosks || []) NPC_OBST.push({ x: k.x, z: k.z, w: k.size || 3.2, d: k.size || 3.2 });
+}
+const walkable = (x1, z1, x2, z2) => clearLine(x1, z1, x2, z2) && !NPC_OBST.some((b) => segHitsBox(x1, z1, x2, z2, b, 0.5));
+const inObstacle = (x, z, m = 0.6) => NPC_OBST.some((b) => Math.abs(x - b.x) < b.w / 2 + m && Math.abs(z - b.z) < b.d / 2 + m) ||
+  CAMPUS.buildings.some((b) => Math.abs(x - b.x) < b.w / 2 + m && Math.abs(z - b.z) < b.d / 2 + m);
+// Tüstüxananın ətrafında dayanıb siqaret çəkmək üçün yerlər (zonanın içi, tikililərdən kənar)
+const SMOKE_SPOTS = [];
+if (SMOKE_ZONE) {
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2, r = i % 2 ? 4.2 : 6;
+    const x = SMOKE_ZONE.x + Math.sin(a) * r, z = SMOKE_ZONE.z + Math.cos(a) * r;
+    if (!inObstacle(x, z, 0.8) && Math.hypot(x - SMOKE_ZONE.x, z - SMOKE_ZONE.z) < SMOKE_ZONE.r - 1) SMOKE_SPOTS.push({ x, z, by: null });
+  }
+}
+const seatNear = (e, m = 0.6) => SEATS.find((s) => Math.hypot(s.x - e.x, s.z - e.z) < m) || null;
+/** günün saatına görə NPC-nin üz tutduğu yer (sürətli yol nöqtələrindən): səhər korpuslar, günorta meydan, axşam Tüstüxana/meydançalar */
+function dayGoal(e) {
+  const h = new Date().getHours();
+  const ids = h >= 7 && h < 12 ? ['rect', 'newbld', 'south', 'lang', 'econ'] : h >= 12 && h < 15 ? ['plaza', 'court', 'newbld'] :
+    h >= 15 && h < 19 ? ['football', 'court', 'smoke', 'plaza'] : h >= 19 && h < 23 ? ['smoke', 'plaza', 'gate'] : ['gate', 'plaza'];
+  let hsh = 0;
+  for (const ch of e.key) hsh = (hsh * 31 + ch.charCodeAt(0)) | 0;
+  const id = ids[Math.abs(hsh + h) % ids.length];
+  return (CAMPUS.teleports || []).find((t) => t.id === id) || null;
+}
+/** NPC-ni ən yaxın, düz gedilə bilən marşrut nöqtəsinə qaytarır */
+function backToGraph(e) {
   let best = null, bestD = Infinity;
   for (const id of nodeIds) {
     const [nx, nz] = nodes[id];
     const d = Math.hypot(nx - e.x, nz - e.z);
-    if (d < bestD && clearLine(e.x, e.z, nx, nz)) { best = id; bestD = d; }
+    if (d < bestD && walkable(e.x, e.z, nx, nz)) { best = id; bestD = d; }
   }
-  if (!best) { // heç biri görünmürsə — ən yaxına köçür
+  if (!best) {
     best = nodeIds.reduce((a, b) => (Math.hypot(nodes[a][0] - e.x, nodes[a][1] - e.z) < Math.hypot(nodes[b][0] - e.x, nodes[b][1] - e.z) ? a : b));
     e.x = nodes[best][0]; e.z = nodes[best][1];
   }
+  Object.assign(e.ai, { mode: 'walk', target: best, prev: null, goto: null, next: null, seat: null, spot: null });
+}
+function releaseSpot(ai) {
+  if (ai.seat) { ai.seat.by = null; ai.seat = null; }
+  if (ai.spot) { ai.spot.by = null; ai.spot = null; }
+}
+/** dayanma anında: siqaret, oturmaq, top — biri seçilir; heç biri olmasa false */
+function npcDecide(e) {
+  const ai = e.ai;
+  const now = Date.now();
+  // Tüstüxana yaxındırsa — siqaret
+  if (SMOKE_ZONE && Math.hypot(e.x - SMOKE_ZONE.x, e.z - SMOKE_ZONE.z) < NPC.smokeRange && Math.random() < NPC.smokeChance) {
+    const free = SMOKE_SPOTS.filter((s) => !s.by && walkable(e.x, e.z, s.x, s.z));
+    const s = free[Math.floor(Math.random() * free.length)];
+    if (s) { s.by = e.key; Object.assign(ai, { mode: 'goto', goto: s, next: 'smoke', spot: s, gotoUntil: now + 40000 }); return true; }
+  }
+  // yaxında boş skamya — oturmaq
+  if (Math.random() < NPC.sitChance) {
+    let best = null, bd = NPC.sitRange;
+    for (const s of SEATS) {
+      const d = Math.hypot(s.x - e.x, s.z - e.z);
+      if (!s.by && d < bd && walkable(e.x, e.z, s.x, s.z)) { best = s; bd = d; }
+    }
+    if (best) { best.by = e.key; Object.assign(ai, { mode: 'goto', goto: best, next: 'sit', seat: best, gotoUntil: now + 30000 }); return true; }
+  }
+  // futbol topu: matç yoxdursa yaxına gedib vurur
+  const fb = balls.find((b) => b.kind === 'football');
+  if (fb && !fb.resetAt && now - (fb.npcKickAt || 0) > NPC.kickCooldown * 1000 && !ballInMatch(fb) && Math.random() < NPC.kickChance &&
+    Math.hypot(fb.px - e.x, fb.pz - e.z) < NPC.kickRange && walkable(e.x, e.z, fb.px, fb.pz)) {
+    Object.assign(ai, { mode: 'goto', goto: fb, next: 'kick', gotoUntil: now + 15000 });
+    return true;
+  }
+  return false;
+}
+/** NPC topa vurur: qapılardan birinə doğru, yüngül */
+function npcKick(e, b) {
+  if (ballInMatch(b) || b.resetAt || !canTouchBall(e.key, b)) return;
+  const g = b.goals?.[Math.random() < 0.5 ? 0 : 1];
+  const tx = g ? g.x + rnd(-6, 6) : b.px + rnd(-10, 10), tz = g ? g.z : b.pz + rnd(-10, 10);
+  const dx = tx - b.px, dz = tz - b.pz, d = Math.hypot(dx, dz) || 1, sp = rnd(5, 9);
+  Object.assign(b, { vx: (dx / d) * sp, vy: rnd(0.5, 2), vz: (dz / d) * sp, lastKick: null, kickAt: Date.now(), npcKickAt: Date.now(), dirty: true });
+  if (b.py < b.r + 0.05) b.py = b.r + 0.05;
+  e.ry = Math.atan2(dx, dz);
+  broadcast({ t: 'kickFx', id: e.key, ball: b.id });
+}
+
+function startAI(e) {
   e.y = 0;
-  e.ai = { target: best, prev: null, wait: 1 + Math.random() * 3 };
+  e.ai = { mode: 'walk', target: null, prev: null, wait: 1 + Math.random() * 3, sayAt: 0, waved: new Map(), lod: 0 };
+  // çıxanda skamyada oturmuşdusa / Tüstüxanada siqaret çəkirdisə — davam edir
+  const seat = (e.emote === 5 || e.emote === 15) && seatNear(e);
+  if (seat && !seat.by) {
+    seat.by = e.key;
+    Object.assign(e.ai, { mode: 'sit', seat, until: Date.now() + rnd(...NPC.sitTime) * 1000 });
+    Object.assign(e, { x: seat.x, z: seat.z, ry: seat.ry, moving: false });
+    if (e.emote === 15 && !inSmokeZone(e.x, e.z)) e.emote = 5;
+    return;
+  }
+  if (e.emote === 14 && inSmokeZone(e.x, e.z)) {
+    Object.assign(e.ai, { mode: 'smoke', until: Date.now() + rnd(...NPC.smokeTime) * 1000 });
+    e.moving = false;
+    return;
+  }
+  e.emote = 0;
+  backToGraph(e);
+  e.ai.wait = 1 + Math.random() * 3;
+  e.ai.decideNow = true; // ilk addımda: yaxında skamya / Tüstüxana / top varmı (server açılanda toplar hələ yaradılmayıb)
+}
+
+/** NPC başqa NPC ilə "söhbət edir": üz-üzə dönür, qısa uydurma cümlə (balon) */
+function npcChat(e, now) {
+  const ai = e.ai;
+  if (now < ai.sayAt) return;
+  ai.sayAt = now + rnd(NPC.chatEvery * 0.6, NPC.chatEvery * 1.4) * 1000;
+  for (const o of entities.values()) {
+    if (o === e || o.online || o.dead || !o.ai || o.moving) continue;
+    if (Math.hypot(o.x - e.x, o.z - e.z) > NPC.chatRange) continue;
+    if (ai.mode !== 'sit') e.ry = Math.atan2(o.x - e.x, o.z - e.z);
+    if (o.ai.mode !== 'sit') o.ry = Math.atan2(e.x - o.x, e.z - o.z);
+    if (Math.random() < 0.7) broadcast({ t: 'say', id: e.key, text: NPC_LINES[Math.floor(Math.random() * NPC_LINES.length)] });
+    else if (ai.mode === 'walk' && !e.emote) e.emote = Math.random() < 0.5 ? 10 : 9; // gülür / düşünür
+    return;
+  }
+}
+/** yanından keçən oyunçuya əl yelləyir (hər oyunçuya 40 saniyədə bir) */
+function npcWave(e, now) {
+  const ai = e.ai;
+  for (const ws of sockets.values()) {
+    const p = ws.inGame && entities.get(ws.key);
+    if (!p || p.dead || Math.hypot(p.x - e.x, p.z - e.z) > NPC.waveRange) continue;
+    if (now - (ai.waved.get(p.key) || 0) < NPC.waveCooldown * 1000) continue;
+    ai.waved.set(p.key, now);
+    Object.assign(ai, { prevMode: ai.mode, mode: 'wave', until: now + 2200 });
+    Object.assign(e, { emote: 1, moving: false, ry: Math.atan2(p.x - e.x, p.z - e.z) });
+    return;
+  }
 }
 
 function stepAI(e, dt) {
   const ai = e.ai;
-  const panic = Date.now() < (e.panicUntil || 0); // vurulan NPC qaçır
+  const now = Date.now();
+  // uzaqdakı NPC-lər seyrək yenilənir (oyunçu yoxdursa ağır hesablama lazım deyil)
+  if (now > (ai.nearAt || 0)) {
+    ai.nearAt = now + 1000;
+    ai.nearP = Infinity;
+    for (const ws of sockets.values()) {
+      const p = ws.inGame && entities.get(ws.key);
+      if (p) ai.nearP = Math.min(ai.nearP, Math.hypot(p.x - e.x, p.z - e.z));
+    }
+  }
+  const far = ai.nearP > NPC.farLod;
+  if (far) { ai.lodAcc = (ai.lodAcc || 0) + dt; if (++ai.lod % 3) return; dt = ai.lodAcc; ai.lodAcc = 0; }
+  const panic = now < (e.panicUntil || 0); // vurulan NPC qaçır
+  if (panic && ai.mode !== 'walk') { releaseSpot(ai); e.emote = 0; backToGraph(e); }
   if (panic) { ai.wait = 0; e.emote = 0; }
+  else if (!far) {
+    if (ai.mode === 'walk' || (ai.mode === 'goto' && ai.next !== 'kick')) npcWave(e, now);
+    if (ai.mode === 'sit' || ai.mode === 'smoke' || (ai.mode === 'walk' && ai.wait > 0)) npcChat(e, now);
+  }
+  switch (ai.mode) {
+    case 'wave':
+      if (now > ai.until) { ai.mode = ai.prevMode === 'goto' ? 'goto' : 'walk'; e.emote = 0; }
+      return;
+    case 'sit': case 'smoke':
+      e.moving = false;
+      if (now > ai.until) {
+        if (ai.mode === 'sit' && ai.seat) { e.x += Math.sin(ai.seat.ry) * 0.95; e.z += Math.cos(ai.seat.ry) * 0.95; } // qalxır
+        releaseSpot(ai);
+        e.emote = 0;
+        backToGraph(e);
+        ai.wait = 0.5;
+      }
+      return;
+    case 'goto': {
+      const g = ai.goto;
+      const gx = g.px ?? g.x, gz = g.pz ?? g.z; // top hərəkət edir — onun indiki yeri
+      const dx = gx - e.x, dz = gz - e.z, dist = Math.hypot(dx, dz);
+      if (now > ai.gotoUntil) { releaseSpot(ai); backToGraph(e); return; }
+      const reach = ai.next === 'kick' ? 0.9 : 0.15;
+      if (dist < reach) {
+        if (ai.next === 'sit') {
+          Object.assign(e, { x: g.x, z: g.z, ry: g.ry, moving: false });
+          // Tüstüxananın skamyasında oturanlar çox vaxt siqaret də çəkir
+          e.emote = inSmokeZone(e.x, e.z) && Math.random() < NPC.smokeChance ? 15 : 5;
+          Object.assign(ai, { mode: 'sit', until: now + rnd(...NPC.sitTime) * 1000 });
+        } else if (ai.next === 'smoke') {
+          Object.assign(e, { moving: false, emote: inSmokeZone(e.x, e.z) ? 14 : 0 });
+          e.ry = Math.atan2(SMOKE_ZONE.x - e.x, SMOKE_ZONE.z - e.z);
+          Object.assign(ai, { mode: 'smoke', until: now + rnd(...NPC.smokeTime) * 1000 });
+        } else {
+          npcKick(e, g);
+          backToGraph(e);
+          ai.wait = 1 + Math.random() * 2;
+        }
+        return;
+      }
+      const s = Math.min(dist, (ai.next === 'kick' ? 2.6 : 1.4) * dt);
+      e.x += (dx / dist) * s; e.z += (dz / dist) * s;
+      e.ry = Math.atan2(dx, dz);
+      e.moving = true;
+      return;
+    }
+  }
+  // walk: marşrut nöqtələri arasında
+  if (ai.decideNow) { ai.decideNow = false; if (!panic && npcDecide(e)) { ai.wait = 0; return; } }
   if (ai.wait > 0) { ai.wait -= dt; e.moving = false; if (ai.wait <= 0) e.emote = 0; return; }
   const [tx, tz] = nodes[ai.target];
   const dx = tx - e.x, dz = tz - e.z;
@@ -154,9 +370,15 @@ function stepAI(e, dt) {
     const options = (adj[ai.target] || []).filter((n) => n !== ai.prev);
     const pool = options.length ? options : adj[ai.target] || [ai.target];
     ai.prev = ai.target;
-    ai.target = pool[Math.floor(Math.random() * pool.length)];
-    if (!panic && Math.random() < 0.35) { // bir az dayanır, bəzən əl yelləyir və ya rəqs edir
-      ai.wait = 2 + Math.random() * 6;
+    // günün vaxtına görə hədəfə yaxınlaşdıran yolu çox vaxt seçir
+    const goal = !panic && Math.random() < 0.6 && dayGoal(e);
+    ai.target = goal ? pool.reduce((a, b) => (Math.hypot(nodes[a][0] - goal.x, nodes[a][1] - goal.z) < Math.hypot(nodes[b][0] - goal.x, nodes[b][1] - goal.z) ? a : b))
+      : pool[Math.floor(Math.random() * pool.length)];
+    if (panic) return;
+    if (npcDecide(e)) return;
+    const night = (() => { const h = new Date().getHours(); return h >= 23 || h < 7; })();
+    if (Math.random() < (night ? 0.55 : 0.35)) { // bir az dayanır, bəzən əl yelləyir və ya rəqs edir
+      ai.wait = 2 + Math.random() * (night ? 12 : 6);
       const r = Math.random();
       e.emote = r < 0.15 ? 1 : r < 0.22 ? 2 : r < 0.27 ? 3 : r < 0.32 ? 7 : r < 0.37 ? 9 : r < 0.41 ? 10 : 0;
     }
@@ -346,6 +568,7 @@ function damage(target, amount, attacker, weapon) {
   target.lastHit = now;
   target.hpSent = Math.round(target.hp);
   if (!target.online) target.panicUntil = now + 7000;
+  if (target.ai && target.hp - amount <= 0) releaseSpot(target.ai);
   broadcast({ t: 'hp', id: target.key, hp: Math.round(target.hp) });
   if (target.hp > 0) return { kill: false };
   // ölüm
@@ -1232,6 +1455,7 @@ wss.on('connection', (ws, req) => {
         entities.set(ws.key, e);
       }
       // Oyunçu NPC-sinin olduğu yerdən davam edir
+      if (e.ai) releaseSpot(e.ai);
       e.online = true; e.ai = null; e.appearance = acc.appearance;
       if (!e.dead) e.protUntil = Date.now() + PROTECT;
       ws.inGame = true;

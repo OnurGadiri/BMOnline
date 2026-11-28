@@ -198,6 +198,18 @@ function handle(m) {
     case 'chat': addChat(m.name, m.text); break;
     case 'sys': addChat(null, m.msg); break;
     case 'loggedOut': backToLogin(); break;
+    case 'say': {
+      // NPC-lərin söhbəti: qısa balon 4 saniyə
+      const o = others.get(m.id);
+      if (!o?.char) break;
+      if (o.sayBubble) o.char.root.remove(o.sayBubble);
+      const b = makeSpeechBubble(String(m.text || '').slice(0, 60));
+      b.position.y = o.char.height + 0.95;
+      o.char.root.add(b);
+      o.sayBubble = b;
+      setTimeout(() => { if (o.sayBubble === b) { o.char.root.remove(b); o.sayBubble = null; } }, 4000);
+      break;
+    }
     case 'kicked':
       state.kicked = true;
       showOverlay(m.msg, true);
@@ -855,15 +867,19 @@ function buildStaticNpcs() {
     }
     scene.add(c.root);
     world.circles.push({ x: n.x, z: n.z, r: 0.45 });
-    staticNpcs.push({ c, bubble, emoteT: 3 + Math.random() * 4, emote: 0 });
+    staticNpcs.push({ c, bubble, emoteT: 3 + Math.random() * 4, emote: 0, baseRy: n.ry || 0, x: n.x, z: n.z, wavedAt: -1e9 });
   }
 }
 function updateStaticNpcs(dt, t) {
   for (const n of staticNpcs) {
-    // arabir əl yelləyir
+    // yaxınlaşan oyunçuya üzünü çevirir və əl yelləyir (30 saniyədə bir); yoxsa öz yerinə baxır, arabir düşünür
+    const near = state.inGame && !player.dead && Math.hypot(player.pos.x - n.x, player.pos.z - n.z) < 6;
+    const want = near ? Math.atan2(player.pos.x - n.x, player.pos.z - n.z) : n.baseRy;
+    n.c.root.rotation.y = angleLerp(n.c.root.rotation.y, want, Math.min(1, dt * 4));
+    if (near && t - n.wavedAt > 30) { n.wavedAt = t; n.emote = 1; n.emoteT = 2.2; }
     n.emoteT -= dt;
     if (n.emoteT <= 0) {
-      n.emote = n.emote ? 0 : 1;
+      n.emote = n.emote ? 0 : Math.random() < 0.6 ? 1 : 9;
       n.emoteT = n.emote ? 2.2 : 6 + Math.random() * 5;
     }
     animateRig(n.c.rig, dt, 0, { emote: n.emote });
