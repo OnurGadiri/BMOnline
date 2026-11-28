@@ -214,12 +214,12 @@ function handle(m) {
     // ---- döyüş ----
     case 'hp':
       if (m.id === state.myId) {
-        if (m.hp < player.hp) { hurtFlash((player.hp - m.hp) / 40); sfx.hurt(); }
+        if (m.hp < player.hp) { hurtFlash((player.hp - m.hp) / 40); sfx.hurt(); player.flinchT = 1; shake(0.12); }
         player.hp = m.hp;
         updateCombatHud();
       } else {
         const o = others.get(m.id);
-        if (o) { o.hp = m.hp; o.hpBar?.userData.set(m.hp); }
+        if (o) { if (m.hp < (o.hp ?? 100)) o.flinchT = 1; o.hp = m.hp; o.hpBar?.userData.set(m.hp); }
       }
       break;
     // ---- interaksiyalar ----
@@ -319,6 +319,7 @@ function handle(m) {
       // server mövqeyi qəbul etmədi (çox sürətli hərəkət) — serverin yerinə qayıt
       player.pos.set(m.x, m.y, m.z);
       player.vy = 0;
+      if (m.kb) shake(0.22); // yumruqla geri itələndin
       break;
     case 'ammo':
       player.ammo = m.ammo;
@@ -327,6 +328,7 @@ function handle(m) {
       break;
     case 'shot': {
       const o = others.get(m.id);
+      if (o) o.recoilT = 1;
       const from = o?.gunMesh ? o.gunMesh.userData.muzzle.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(...m.o);
       const to = new THREE.Vector3(...m.h);
       fx.tracer(from, to);
@@ -341,6 +343,7 @@ function handle(m) {
       break;
     }
     case 'hit':
+      hitStop(m.kill ? 110 : m.head ? 80 : 50);
       showHitmarker(m.kill || m.head);
       sfx.hit(m.head);
       fx.damageNumber(new THREE.Vector3(...m.at).add(new THREE.Vector3(0, 0.3, 0)), m.kill ? '💀' : `-${m.dmg}`, m.head ? '#ffd166' : '#ffffff');
@@ -357,6 +360,8 @@ function handle(m) {
         inter.charging = false;
         player.killer = m.by;
         player.deathEnd = performance.now() + (m.respawn ?? 6000);
+        if (m.from) player.ry = Math.atan2(m.from[0] - player.pos.x, m.from[1] - player.pos.z); // üzü vurana, arxası üstə yıxılır
+        shake(0.3);
         if (document.pointerLockElement) document.exitPointerLock();
         attachGun(player, false);
         updateCombatHud();
@@ -364,7 +369,11 @@ function handle(m) {
         $('death-by').textContent = m.by ? `${m.by} səni ${m.weapon === 'pistol' ? 'vurdu' : 'yumruqla yıxdı'}` : '';
       } else {
         const o = others.get(m.id);
-        if (o) { o.dead = true; o.hpBar?.userData.set(0); }
+        if (o) {
+          o.dead = true;
+          o.hpBar?.userData.set(0);
+          if (m.from) { const p = o.char.root.position; o.targetRy = Math.atan2(m.from[0] - p.x, m.from[1] - p.z); }
+        }
       }
       break;
     case 'respawn':
@@ -582,6 +591,7 @@ function attack() {
   fx.sparks(aim, false);
   sfx.shot(1);
   cam.pitch -= 0.018; // geri təpmə
+  player.recoilT = 1;
   updateCombatHud();
   if (player.ammo <= 0) setTimeout(reload, 250);
 }
@@ -1253,6 +1263,7 @@ function updatePlayer(dt) {
   const root = player.char.root;
   if (player.dead) {
     // yerə yıxılır, hərəkət etmir
+    root.rotation.y = angleLerp(root.rotation.y, player.ry, Math.min(1, dt * 12));
     root.rotation.x += (-1.45 - root.rotation.x) * Math.min(1, dt * 6);
     root.position.set(player.pos.x, player.pos.y + 0.12, player.pos.z);
     animateRig(player.char.rig, dt, 0, { dead: true });
@@ -1306,6 +1317,11 @@ function updatePlayer(dt) {
   if (aiming) player.ry = angleLerp(player.ry, cam.yaw + Math.PI, Math.min(1, dt * 20)); // tapança ilə həmişə nişana baxır
   else if (mx || mz) player.ry = angleLerp(player.ry, Math.atan2(mx, mz), Math.min(1, dt * 12));
   if (player.punchT > 0) { player.punchT += dt / 0.32; if (player.punchT >= 1) player.punchT = 0; }
+  player.recoilT = Math.max(0, (player.recoilT || 0) - dt * 7);
+  player.flinchT = Math.max(0, (player.flinchT || 0) - dt * 4);
+  // nişangah: qaçanda/havada səpələnmə artır (server də belə hesablayır)
+  { const sp = player.weapon !== 1 ? '' : !player.onGround ? 'air' : player.speed > 0.5 ? 'move' : '';
+    if (sp !== frame.spread) { frame.spread = sp; document.body.classList.toggle('spread-move', sp === 'move'); document.body.classList.toggle('spread-air', sp === 'air'); } }
 
   if (keys.has('Space') && player.onGround) { player.vy = 7; player.onGround = false; }
   player.vy -= 20 * dt;
@@ -1318,6 +1334,7 @@ function updatePlayer(dt) {
   player.char.root.rotation.y = player.ry;
   animateRig(player.char.rig, dt, sp / 4, {
     air: !player.onGround, emote: player.emote, weapon: player.weapon, aim: cam.pitch, punch: player.punchT,
+    recoil: player.recoilT || 0, flinch: player.flinchT || 0,
   });
 
   sendPos(dt, target > 0);
@@ -1663,6 +1680,11 @@ function updateCamera(dt) {
   if (hit) want = Math.max(0.8, hit.distance - 0.35);
   cam.curDist += (want - cam.curDist) * Math.min(1, dt * (want < cam.curDist ? 20 : 5));
   camera.position.copy(target).addScaledVector(camDir, cam.curDist);
+  if (cam.shake > 0.001) {
+    const s = cam.shake;
+    camera.position.x += (Math.random() - 0.5) * s; camera.position.y += (Math.random() - 0.5) * s; camera.position.z += (Math.random() - 0.5) * s;
+    cam.shake *= Math.max(0, 1 - dt * 9);
+  }
   if (camera.position.y < 0.3) camera.position.y = 0.3;
   camera.lookAt(target);
   camera.aspect = canvas.clientWidth / canvas.clientHeight;
@@ -1686,6 +1708,8 @@ function updateOthers(dt) {
     const wantGun = o.w === 1 && !o.dead;
     if (wantGun !== !!o.gunMesh) attachGun(o, wantGun);
     if (o.punchT > 0) { o.punchT += dt / 0.32; if (o.punchT >= 1) o.punchT = 0; }
+    o.recoilT = Math.max(0, (o.recoilT || 0) - dt * 7);
+    o.flinchT = Math.max(0, (o.flinchT || 0) - dt * 4);
     const v = Math.hypot(r.position.x - bx, r.position.z - bz) / Math.max(dt, 1e-3);
     // LOD: uzaqdakı personajlar gizlənir, orta məsafədəkilər daha seyrək animasiya olunur
     const d2 = r.position.distanceToSquared(camera.position);
@@ -1700,15 +1724,21 @@ function updateOthers(dt) {
     const adt = Math.min(0.15, o.animAcc); o.animAcc = 0;
     animateRig(o.char.rig, adt, o.dead ? 0 : o.moving ? Math.max(0.35, v / 4) : 0, {
       air: !o.dead && r.position.y > 0.05, emote: o.emote, weapon: o.w, punch: o.punchT || 0, dead: o.dead,
+      recoil: o.recoilT || 0, flinch: o.flinchT || 0,
     });
   }
 }
+
+// ---------- Döyüş hissi: hit stop və kamera silkələnməsi ----------
+let hitStopUntil = 0;
+function hitStop(ms) { hitStopUntil = performance.now() + ms; shake(0.08); }
+function shake(v) { cam.shake = Math.max(cam.shake || 0, v); }
 
 function loop() {
   requestAnimationFrame(loop);
   const raw = clock.getDelta();
   if (state.inGame) adaptResolution(raw);
-  frame(Math.min(0.05, raw));
+  frame(Math.min(0.05, raw) * (performance.now() < hitStopUntil ? 0.06 : 1));
 }
 // Sazlama/test üçün: oyun dövrünü əl ilə irəli aparmaq (məs. __bmu.step(1/60, 120))
 window.__bmu.step = (dt = 1 / 60, n = 1) => { for (let i = 0; i < n; i++) { clock.elapsedTime += dt; frame(dt); } };

@@ -229,9 +229,47 @@ function gallowsState() {
 
 // ---------- Döyüş ----------
 const W = {
-  pistol: { dmg: 22, head: 55, range: 70, cooldown: 230, mag: 12, reload: 1500 },
-  fist: { dmg: 12, range: 1.9, cooldown: 450 },
+  pistol: {
+    dmg: 22, head: 55, range: 70, cooldown: 230, mag: 12, reload: 1500,
+    // məsafə ilə zərər: falloffStart metrdən sonra xətti azalır, range-də minMul qədər qalır
+    falloffStart: 25, minMul: 0.55,
+    // səpələnmə (radian, konus yarımbucağı): dayananda dəqiq, qaçanda/havada güllə yayılır
+    spread: { stand: 0, move: 0.035, air: 0.075 },
+  },
+  // knockback — yumruq hədəfi bu qədər geri itələyir (m)
+  fist: { dmg: 12, range: 1.9, cooldown: 450, knockback: 1.3 },
 };
+/** məsafəyə görə tapança zərəri */
+function pistolDamage(base, dist) {
+  const p = W.pistol;
+  if (dist <= p.falloffStart) return base;
+  const k = Math.min(1, (dist - p.falloffStart) / (p.range - p.falloffStart));
+  return Math.max(1, Math.round(base * (1 - (1 - p.minMul) * k)));
+}
+/** atıcının vəziyyətinə görə səpələnmə: istiqaməti təsadüfi kiçik bucaqla əyir */
+function applySpread(d, e) {
+  const sp = e.y > 0.2 ? W.pistol.spread.air : e.moving ? W.pistol.spread.move : W.pistol.spread.stand;
+  if (!sp) return d;
+  let rx, ry, rz;
+  do { rx = Math.random() * 2 - 1; ry = Math.random() * 2 - 1; rz = Math.random() * 2 - 1; } while (rx * rx + ry * ry + rz * rz > 1);
+  const v = [d[0] + rx * sp, d[1] + ry * sp, d[2] + rz * sp], l = Math.hypot(...v);
+  return v.map((c) => c / l);
+}
+/** yumruqla geri itələmə: kampus/otaq sərhədindən çıxarmır; onlayn oyunçuya yeni yerini bildirir */
+function knockback(target, attacker) {
+  const kb = W.fist.knockback;
+  let dx = target.x - attacker.x, dz = target.z - attacker.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 1e-3) { dx = Math.sin(attacker.ry); dz = Math.cos(attacker.ry); } else { dx /= d; dz /= d; }
+  const room = roomAt(target.x, target.z);
+  const lim = room ? room.rect : CAMPUS.bounds;
+  const nx = Math.min(lim.maxX, Math.max(lim.minX, target.x + dx * kb));
+  const nz = Math.min(lim.maxZ, Math.max(lim.minZ, target.z + dz * kb));
+  if (roomAt(nx, nz) !== room) return; // otağın qapısından içəri/çölə itələmə yoxdur
+  target.x = nx; target.z = nz;
+  const ws = sockets.get(target.key);
+  if (ws && target.online) { ws.lastPosAt = Date.now(); send(ws, { t: 'correct', x: nx, y: target.y || 0, z: nz, kb: 1 }); }
+}
 const RESPAWN_PLAYER = 6000, RESPAWN_NPC = 12000, PROTECT = 3000;
 const REGEN_DELAY = 5000, REGEN_RATE = 8; // can/san
 
@@ -316,10 +354,11 @@ function damage(target, amount, attacker, weapon) {
   target.emote = 0;
   target.respawnAt = now + (target.online ? RESPAWN_PLAYER : RESPAWN_NPC);
   target.killerPos = { x: attacker.x, z: attacker.z };
+  target.ry = Math.atan2(attacker.x - target.x, attacker.z - target.z); // üzü vurana — arxası üstə ondan uzağa yıxılır
   const accA = db.accounts[attacker.key], accT = db.accounts[target.key];
   accA.kills = (accA.kills || 0) + 1;
   accT.deaths = (accT.deaths || 0) + 1;
-  broadcast({ t: 'dead', id: target.key, by: attacker.name, weapon, respawn: target.respawnAt - now });
+  broadcast({ t: 'dead', id: target.key, by: attacker.name, weapon, respawn: target.respawnAt - now, from: [+attacker.x.toFixed(2), +attacker.z.toFixed(2)] });
   broadcast({ t: 'sys', msg: `${weapon === 'pistol' ? '🔫' : '👊'} ${attacker.name} → ${target.name}${target.online ? '' : ' (NPC)'}` });
   addXp(attacker.key, target.online ? 25 : 10);
   return { kill: true };
@@ -1224,7 +1263,7 @@ wss.on('connection', (ws, req) => {
       if (!o || !d) return;
       const len = Math.hypot(...d);
       if (len < 1e-6) return;
-      d = d.map((v) => v / len);
+      d = applySpread(d.map((v) => v / len), e);
       // atəş nöqtəsi oyunçunun yanında olmalıdır
       const eye = [e.x, e.y + 1.45, e.z];
       if (Math.hypot(o[0] - eye[0], o[1] - eye[1], o[2] - eye[2]) > 2.5) o = eye;
@@ -1239,7 +1278,7 @@ wss.on('connection', (ws, req) => {
       broadcast({ t: 'shot', id: e.key, o: o.map((v) => +v.toFixed(2)), h, hit: !!hit }, ws);
       send(ws, { t: 'ammo', ammo: ws.ammo });
       if (hit) {
-        const dmg = hit.head ? W.pistol.head : W.pistol.dmg;
+        const dmg = pistolDamage(hit.head ? W.pistol.head : W.pistol.dmg, hit.t);
         const r = damage(hit.e, dmg, e, 'pistol');
         if (r) send(ws, { t: 'hit', id: hit.e.key, dmg, head: hit.head, kill: r.kill, at: h });
       }
@@ -1268,7 +1307,10 @@ wss.on('connection', (ws, req) => {
       }
       if (best) {
         const r = damage(best, W.fist.dmg, e, 'fist');
-        if (r) send(ws, { t: 'hit', id: best.key, dmg: W.fist.dmg, head: false, kill: r.kill, at: [best.x, best.y + 1.4, best.z] });
+        if (r) {
+          if (!r.kill) knockback(best, e);
+          send(ws, { t: 'hit', id: best.key, dmg: W.fist.dmg, head: false, kill: r.kill, at: [best.x, best.y + 1.4, best.z] });
+        }
       }
       return;
     }

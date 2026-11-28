@@ -55,6 +55,7 @@ class Client {
       this.send({ t: 'pos', x, y: 0, z, ry: Math.atan2(to.x - from.x, to.z - from.z), m: 1, e: 0, w: this.w || 0 });
       await sleep(100);
     }
+    this.send({ t: 'pos', x: to.x, y: 0, z: to.z, ry: Math.atan2(to.x - from.x, to.z - from.z), m: 0, e: 0, w: this.w || 0 });
     return { x: to.x, z: to.z };
   }
 }
@@ -158,6 +159,7 @@ async function enter(name, pin = '1234', existing = false) {
   for (let i = 0; i < 4; i++) { await sleep(260); shoot(); }
   const dB = await deadB;
   ok('5 güllə ilə öldürülür', !!dB && dB.by === 'Alfa', JSON.stringify(dB));
+  ok('ölüm mesajında vuranın yeri var (yıxılma istiqaməti üçün)', Array.isArray(dB?.from) && Math.hypot(dB.from[0] - A.c.pos.x, dB.from[1] - A.c.pos.z) < 0.6, JSON.stringify(dB?.from));
   const xp = await xpKill;
   ok('öldürən XP alır', !!xp, JSON.stringify(xp));
   // ölü oyunçu hərəkət edə bilmir
@@ -166,6 +168,12 @@ async function enter(name, pin = '1234', existing = false) {
   const snapDead = await A.c.waitT('snap', 1000);
   const rowB = snapDead?.e.find((r) => r[0] === 'beta');
   ok('ölü oyunçu snapshot-da ölü görünür və yerindən tərpənmir', !!rowB && rowB[8] === 1 && Math.abs(rowB[1] - B.c.pos.x) < 0.01, JSON.stringify(rowB));
+  {
+    // üzü vurana dönür — arxası üstə vurandan uzağa yıxılır
+    const want = Math.atan2(A.c.pos.x - B.c.pos.x, A.c.pos.z - B.c.pos.z);
+    const diff = rowB ? Math.abs(Math.atan2(Math.sin(rowB[4] - want), Math.cos(rowB[4] - want))) : 9;
+    ok('ölən oyunçu vurana tərəf dönüb ondan uzağa yıxılır', diff < 0.05, rowB ? `ry=${rowB[4]} istənən=${want.toFixed(2)}` : '');
+  }
   // ölüyə atəş
   await sleep(260);
   shoot();
@@ -194,9 +202,14 @@ async function enter(name, pin = '1234', existing = false) {
   A.c.send({ t: 'pos', x: A.c.pos.x, y: 0, z: A.c.pos.z, ry: 0, m: 0, e: 0, w: 0 });
   await sleep(150);
   const ph = A.c.waitT('hit', 1500);
+  const kbB = B.c.waitT('correct', 1500, (m) => m.kb === 1);
   A.c.send({ t: 'punch' });
   const p = await ph;
   ok('yumruq dəyir (12 zərər)', p?.dmg === 12, JSON.stringify(p));
+  const kb = await kbB;
+  const kbD = kb ? Math.hypot(kb.x - A.c.pos.x, kb.z - A.c.pos.z) : 0;
+  ok('yumruq hədəfi geri itələyir (knockback ~1.3 m)', kbD > 2.3 && kbD < 2.7, kbD.toFixed(2));
+  if (kb) B.c.pos = { x: kb.x, z: kb.z };
   // arxaya dönüb vurmaq dəyməməlidir
   A.c.send({ t: 'pos', x: A.c.pos.x, y: 0, z: A.c.pos.z, ry: Math.PI, m: 0, e: 0, w: 0 });
   await sleep(600);
@@ -495,8 +508,9 @@ async function enter(name, pin = '1234', existing = false) {
     T.c.send({ t: 'pos', x: T.c.pos.x, y: 0, z: T.c.pos.z, ry: Math.PI / 2, m: 0, e: 0, w: 0 });
     await sleep(500);
     const ph = T.c.waitT('hit', 900);
+    const kbS = S.c.waitT('correct', 900, (m) => m.kb === 1);
     T.c.send({ t: 'punch' });
-    ok('təhlükəsiz rejimdəki oyunçuya yumruq dəymir', !(await ph));
+    ok('təhlükəsiz rejimdəki oyunçuya yumruq dəymir və onu itələmir', !(await ph) && !(await kbS));
     // S özü də heç kimi vura bilmir, silah tuta bilmir
     const off1 = S.c.waitT('combatOff', 1500);
     const sh1 = S.c.waitT('hit', 900);
@@ -621,6 +635,54 @@ async function enter(name, pin = '1234', existing = false) {
     const w3 = await L.c.waitT('welcome', 2000);
     ok('çıxdıqdan sonra yenidən girmək olur (NPC yenə oyunçu olur)', w3?.you.id === 'gamma' && !!(await back));
     L.c.close();
+    await sleep(300);
+  }
+
+  // --- 8h. Döyüş fizikası: məsafə ilə zərər, qaçanda səpələnmə, güllə binadan keçmir ---
+  {
+    const S = await enter('Gamma', '1234', true);
+    const T = await enter('Epsilon', '1234', true);
+    const toPlaza = async (P) => {
+      for (let i = 0; i < 3; i++) {
+        const c = P.c.waitT('correct', 2000), er = P.c.waitT('tpErr', 2000);
+        P.c.send({ t: 'tp', id: 'plaza' });
+        const got = await Promise.race([c, er]);
+        if (got?.t === 'correct') { P.c.pos = { x: got.x, z: got.z }; return; }
+        await sleep(10500);
+      }
+    };
+    await Promise.all([S, T].map(toPlaza));
+    await sleep(3300); // giriş qoruması
+    // meydanda 65 m aralı (arada bina yoxdur)
+    [S.c.pos, T.c.pos] = await Promise.all([S.c.walkTo(S.c.pos, { x: 57, z: -160 }, 8.5), T.c.walkTo(T.c.pos, { x: -8, z: -160 }, 8.5)]);
+    await sleep(300);
+    const eyeT = [T.c.pos.x, 1.45, T.c.pos.z];
+    const at = (P) => [P.c.pos.x - eyeT[0], 1.2 - 1.45, P.c.pos.z - eyeT[2]];
+    const h1 = T.c.waitT('hit', 1500);
+    T.c.send({ t: 'shoot', o: eyeT, d: at(S) });
+    const r1 = await h1;
+    ok('uzaq məsafədə (65 m) tapança zərəri azalır', !!r1 && r1.dmg < 22 && r1.dmg > 0, `${r1?.dmg} zərər`);
+    // qaçarkən atəş: güllə səpələnir
+    T.c.send({ t: 'pos', x: T.c.pos.x, y: 0, z: T.c.pos.z, ry: Math.PI / 2, m: 1, e: 0, w: 1 });
+    await sleep(150);
+    let hits = 0;
+    for (let i = 0; i < 8; i++) {
+      await sleep(260);
+      const h = T.c.waitT('hit', 450);
+      T.c.send({ t: 'shoot', o: eyeT, d: at(S) });
+      if (await h) hits++;
+    }
+    ok('qaçarkən atəşdə güllə səpələnir (65 m-də çoxu yayınır)', hits <= 5, `${hits}/8 dəydi`);
+    // güllə binadan keçmir: aralarında Rektorluq
+    [S.c.pos, T.c.pos] = await Promise.all([S.c.walkTo(S.c.pos, { x: 95, z: -140 }, 8.5), T.c.walkTo(T.c.pos, { x: 52, z: -140 }, 8.5)]);
+    await sleep(300);
+    const eye2 = [T.c.pos.x, 1.45, T.c.pos.z];
+    const wall = T.c.waitT('hit', 900);
+    const shotB = S.c.waitT('shot', 900, (m) => m.id === 'epsilon');
+    T.c.send({ t: 'shoot', o: eye2, d: [S.c.pos.x - eye2[0], 1.2 - 1.45, S.c.pos.z - eye2[2]] });
+    const sb = await shotB;
+    ok('güllə binadan keçmir (arada Rektorluq)', !(await wall) && !!sb && sb.hit === false && sb.h[0] < 61, sb ? `güllə x=${sb.h[0]}-də dayandı` : '');
+    S.c.close(); T.c.close();
     await sleep(300);
   }
 

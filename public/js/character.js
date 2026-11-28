@@ -142,6 +142,8 @@ export function buildCharacter(input) {
   const W = a.build, M = a.muscle, L = a.legLen;
 
   const root = new THREE.Group();
+  // əvvəl üzün baxdığı tərəfə dön (y), sonra öz oxunda əyil (x) — ölüm yıxılması bədənə görə olsun, dünyaya görə yox
+  root.rotation.order = 'YXZ';
   root.rotation.order = 'YXZ'; // yıxılma (x) xarakterin öz istiqamətində olsun
   const body = group(root);
   body.scale.setScalar(a.height);
@@ -716,6 +718,17 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.headX = p * 0.6; T.headY = 0;
     T.spineY = moving ? 0 : 0.12;
   }
+  if (opt.recoil > 0 && opt.weapon === 1) {
+    // geri təpmə: atəşdən sonra qollar yuxarı qalxır, baş azca geri
+    const k = opt.recoil;
+    T.armRx -= 0.45 * k; T.armLx -= 0.35 * k; T.elbowR -= 0.3 * k; T.headX -= 0.06 * k; T.spineX -= 0.05 * k;
+  }
+  if (opt.flinch > 0 && !opt.dead) {
+    // vurulanda qısa sarsılma: bədən geri əyilir, baş silkələnir, qollar açılır
+    const k = opt.flinch;
+    T.spineX -= 0.32 * k; T.headX -= 0.32 * k; T.headY += Math.sin(t * 40) * 0.12 * k;
+    T.armLz += 0.35 * k; T.armRz -= 0.35 * k;
+  }
   if (opt.punch > 0) {
     // yumruq: sağ qol sürətlə irəli
     const s2 = Math.sin(Math.PI * Math.min(1, opt.punch));
@@ -724,7 +737,7 @@ export function animateRig(r, dt, speed, opt = {}) {
     T.spineY = -0.35 * s2;
   }
 
-  const k = Math.min(1, dt * (opt.punch > 0 ? 30 : moving ? 14 : opt.weapon === 1 ? 16 : 9));
+  const k = Math.min(1, dt * (opt.punch > 0 || opt.recoil > 0.5 || opt.flinch > 0.5 ? 30 : moving ? 14 : opt.weapon === 1 ? 16 : 9));
   const L = (o, prop, v) => { o[prop] += (v - o[prop]) * k; };
   L(r.legL.rotation, 'x', T.legL); L(r.legR.rotation, 'x', T.legR);
   L(r.kneeL.rotation, 'x', T.kneeL); L(r.kneeR.rotation, 'x', T.kneeR);

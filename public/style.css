@@ -467,3 +467,8 @@ body.photo .smoke-chip { display: none !important; }
 .confirm-btns { display: flex; gap: 10px; }
 .confirm-btns button { flex: 1; padding: 11px; }
 button.danger { background: #c94c3f; color: #fff; }
+
+/* Səpələnmə: qaçanda / havada nişangah genişlənir */
+body.aiming .crosshair { transition: transform .12s ease-out; }
+body.aiming.spread-move .crosshair { transform: scale(1.7); }
+body.aiming.spread-air .crosshair { transform: scale(2.4); }
