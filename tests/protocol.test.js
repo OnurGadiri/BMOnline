@@ -399,7 +399,10 @@ async function enter(name, pin = '1234', existing = false) {
     A.c.send({ t: 'xgo' });
     ok('otağı quran 3 nəfərlə başladanda geri sayım başlayır', !!(await cnt));
     const [sa, sb, sg] = await Promise.all([A, B, G].map((P) => P.c.waitT('xstart', 9000)));
-    ok('imtahan avtomatik başlayır (hamıya suallar gəlir)', !!(sa && sb && sg) && sa.qs.length === 5 && sa.npcs.length > 0, sa ? `${sa.qs.length} sual, ${sa.npcs.length} NPC` : '');
+    ok('imtahan avtomatik başlayır (hamıya 10 sual gəlir)', !!(sa && sb && sg) && sa.qs.length === 10 && sa.npcs.length > 0, sa ? `${sa.qs.length} sual, ${sa.npcs.length} NPC` : '');
+    ok('imtahan daxilində təkrar sual yoxdur, hər sualın 3 fərqli variantı var',
+      !!sa && new Set(sa.qs.map((q) => q.q)).size === sa.qs.length && sa.qs.every((q) => q.o.length === 3 && new Set(q.o).size === 3));
+    ok('hamıya eyni suallar gəlir', !!(sa && sg) && sa.qs.every((q, i) => q.q === sg.qs[i].q));
     ok('hər tələbəyə ayrı yer verilir', !!sa && new Set([sa.seat, sb?.seat, sg?.seat]).size === 3);
     const noFight = A.c.waitT('combatOff', 1500);
     A.c.send({ t: 'punch' });
@@ -427,14 +430,31 @@ async function enter(name, pin = '1234', existing = false) {
     const late = E.c.waitT('xstart', 2000);
     E.c.send({ t: 'xjoin', id: sa.id });
     const lt = await late;
-    ok('gedən imtahana sonradan qoşulmaq olur (boş yer + qalan vaxt)', !!lt && lt.late === true && lt.qs.length === 5 && lt.time > 30 && lt.time < 180 && ![sa.seat, sg?.seat].includes(lt.seat), lt ? `yer ${lt.seat}, ${lt.time} san` : 'gəlmədi');
+    ok('gedən imtahana sonradan qoşulmaq olur (boş yer + qalan vaxt)', !!lt && lt.late === true && lt.qs.length === 10 && lt.time > 30 && lt.time < 300 && ![sa.seat, sg?.seat].includes(lt.seat), lt ? `yer ${lt.seat}, ${lt.time} san` : 'gəlmədi');
     // A, G və E bütün sualları cavablandırır → imtahan bitir
     const end = A.c.waitT('xend', 4000);
-    for (let i = 0; i < 5; i++) { A.c.send({ t: 'xans', a: rv && i === 0 ? rv.a : 0 }); G.c.send({ t: 'xans', a: 1 }); E.c.send({ t: 'xans', a: 2 }); await sleep(120); }
+    for (let i = 0; i < 10; i++) { A.c.send({ t: 'xans', a: rv && i === 0 ? rv.a : 0 }); G.c.send({ t: 'xans', a: 1 }); E.c.send({ t: 'xans', a: 2 }); await sleep(120); }
     const en = await end;
     ok('hamı cavab verəndə imtahan bitir, nəticələr gəlir', !!en && en.res.length === 4, en ? en.res.map((r) => `${r.name}:${r.out ? 'out' : r.score}`).join(' ') : '');
-    E.c.close();
     ok('tərk edən nəticədə xaric kimi görünür', !!en && en.res.find((r) => r.name === 'Beta')?.out === true);
+    // ikinci imtahan eyni tələbələrlə: suallar təsadüfi seçilir və yaxında görülənlər təkrarlanmır
+    await sleep(6600); // nəticə ekranı, sonra hamı qapının qarşısına çıxarılır
+    const lob2W = A.c.waitT('xlist', 2000, (m) => m.s.some((x) => x.state === 'lobby' && x.host === 'Alfa'));
+    A.c.send({ t: 'xjoin', new: true });
+    const lob2 = await lob2W;
+    const id2 = lob2?.s.find((x) => x.host === 'Alfa')?.id;
+    G.c.send({ t: 'xjoin', id: id2 });
+    E.c.send({ t: 'xjoin', id: id2 });
+    await A.c.waitT('xlist', 2000, (m) => m.s.some((x) => x.id === id2 && x.n === 3));
+    const second = A.c.waitT('xstart', 9000);
+    A.c.send({ t: 'xgo' });
+    const s2 = await second;
+    const firstQs = new Set(sa.qs.map((q) => q.q));
+    const overlap = s2 ? s2.qs.filter((q) => firstQs.has(q.q)).length : -1;
+    ok('ikinci imtahanda suallar fərqlidir (eyni tələbələrə təkrar düşmür)', !!s2 && s2.qs.length === 10 && overlap === 0, `ortaq: ${overlap}`);
+    A.c.send({ t: 'xleave' });
+    await A.c.waitT('xout', 2000);
+    E.c.close();
     G.c.close();
     await sleep(300);
   }
@@ -674,8 +694,8 @@ async function enter(name, pin = '1234', existing = false) {
       if (await h) hits++;
     }
     ok('qaçarkən atəşdə güllə səpələnir (65 m-də çoxu yayınır)', hits <= 5, `${hits}/8 dəydi`);
-    // güllə binadan keçmir: aralarında Rektorluq
-    [S.c.pos, T.c.pos] = await Promise.all([S.c.walkTo(S.c.pos, { x: 95, z: -140 }, 8.5), T.c.walkTo(T.c.pos, { x: 52, z: -140 }, 8.5)]);
+    // güllə binadan keçmir: aralarında Rektorluq (qapıdan — z=-140 — kənarda, orada imtahandan çıxanlar dayanır)
+    [S.c.pos, T.c.pos] = await Promise.all([S.c.walkTo(S.c.pos, { x: 95, z: -132 }, 8.5), T.c.walkTo(T.c.pos, { x: 52, z: -132 }, 8.5)]);
     await sleep(300);
     const eye2 = [T.c.pos.x, 1.45, T.c.pos.z];
     const wall = T.c.waitT('hit', 900);

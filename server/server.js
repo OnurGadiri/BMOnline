@@ -918,27 +918,40 @@ setInterval(() => {
 // Oyunçu ayağa qalxıb NPC-lərin və digər oyunçuların kağızına baxa, ya da yerində telefona baxa bilər.
 // Müəllim oyunçunu yerindən kənarda və ya kopya çəkərkən görsə — şübhə artır, 100-də imtahandan xaric olunur.
 const EXAM_ROOM = (CAMPUS.rooms || [])[0] || null;
-const EXAM_CFG = { min: 3, max: 8, time: 180, questions: 5, npcs: 9, countdown: 10, ...(EXAM_ROOM?.exam || {}) };
-const QUESTIONS = [
-  ['C#-da tam ədəd tipi hansıdır?', ['int', 'string', 'bool'], 0],
-  ['Konsola sətir yazmaq üçün:', ['print()', 'Console.WriteLine()', 'echo'], 1],
-  ['Sinifdən obyekt yaratmaq üçün açar söz:', ['create', 'make', 'new'], 2],
-  ['List<int> siyahısındakı elementlərin sayı:', ['.Count', '.Length', '.Size'], 0],
-  ['Massivin uzunluğu:', ['.Size', '.Length', '.Total'], 1],
-  ['Varislik (inheritance) hansı simvolla yazılır?', ['->', 'extends', ':'], 2],
-  ['Dəyəri heç vaxt dəyişməyən sabit:', ['const', 'var', 'dynamic'], 0],
-  ['Sətir interpolyasiyası:', ['"Salam {ad}"', '$"Salam {ad}"', '@"Salam {ad}"'], 1],
-  ['İstisnanı (exception) tutmaq üçün:', ['if / else', 'switch', 'try / catch'], 2],
-  ['Heç nə qaytarmayan metodun tipi:', ['void', 'null', 'empty'], 0],
-  ['İnterfeys elan etmək üçün açar söz:', ['struct', 'interface', 'abstract'], 1],
-  ['LINQ-da filtrləmə metodu:', ['Select', 'OrderBy', 'Where'], 2],
-  ['async metodda nəticəni gözləmək üçün:', ['await', 'wait', 'yield'], 0],
-  ['null ola bilən int:', ['int!', 'int?', 'int*'], 1],
-  ['Bütün tiplərin baza sinfi:', ['base', 'root', 'object'], 2],
-  ['"==" operatoru nə edir?', ['müqayisə', 'mənimsətmə', 'artırma'], 0],
-  ['for (int i = 0; i < 3; i++) neçə dəfə işləyir?', ['2', '3', '4'], 1],
-  ['Sinfin üzvünü yalnız daxildən əlçatan edən:', ['public', 'internal', 'private'], 2],
-];
+const EXAM_CFG = { min: 3, max: 8, time: 300, questions: 10, npcs: 9, countdown: 10, ...(EXAM_ROOM?.exam || {}) };
+// Sual bankı ayrıca fayldadır (server/data/csharp-questions.json): {id, topic, q, o: [3 variant], c: düzgün indeks}
+const QUESTIONS = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'csharp-questions.json'), 'utf8'))
+  .filter((x) => x && Number.isInteger(x.id) && typeof x.q === 'string' && Array.isArray(x.o) && x.o.length === 3 && x.c >= 0 && x.c <= 2);
+const SEEN_KEEP = 60; // hər oyunçunun son neçə sualı yadda saxlanır (ardıcıl imtahanlarda təkrar az düşsün)
+/**
+ * İmtahan üçün təsadüfi suallar: imtahan daxilində təkrar yoxdur, mövzular növbə ilə qarışır,
+ * iştirakçıların yaxında gördüyü suallar ən axıra qalır; cavab variantları qarışdırılır.
+ */
+function pickQuestions(keys) {
+  const seen = new Set();
+  for (const k of keys) for (const id of db.accounts[k]?.seenQ || []) seen.add(id);
+  const byTopic = (list) => {
+    const g = new Map();
+    for (const q of shuffle([...list])) { if (!g.has(q.topic)) g.set(q.topic, []); g.get(q.topic).push(q); }
+    const lanes = shuffle([...g.values()]), out = [];
+    while (lanes.some((l) => l.length)) for (const l of lanes) if (l.length) out.push(l.shift());
+    return out;
+  };
+  const order = [...byTopic(QUESTIONS.filter((q) => !seen.has(q.id))), ...byTopic(QUESTIONS.filter((q) => seen.has(q.id)))];
+  const pick = order.slice(0, EXAM_CFG.questions);
+  rememberQuestions(keys, pick);
+  return pick.map(({ id, q, o, c }) => {
+    const idx = shuffle([0, 1, 2]);
+    return { id, q, o: idx.map((i) => o[i]), c: idx.indexOf(c) };
+  });
+}
+function rememberQuestions(keys, qs) {
+  for (const k of keys) {
+    const acc = db.accounts[k];
+    if (acc) acc.seenQ = [...(acc.seenQ || []).filter((id) => !qs.some((q) => q.id === id)), ...qs.map((q) => q.id)].slice(-SEEN_KEEP);
+  }
+  scheduleSave();
+}
 // NPC sinif yoldaşları (uydurma): skill — düzgün cavab ehtimalı, sneaky — özü də kopya çəkməyə meyli
 const NPC_STUDENTS = [
   ['Əlaçı Leyla', 0.95, 0], ['Nərd Nihad', 0.9, 0.05], ['Səliqəli Səbinə', 0.85, 0], ['Sakit Sevinc', 0.75, 0.05],
@@ -1039,6 +1052,7 @@ function examLateJoin(ws, S, cur) {
   S.members.set(ws.key, p);
   const s = S.L.seats[seat];
   tpTo(ws.key, s.x, s.z);
+  rememberQuestions([ws.key], S.qs); // gec qoşulan da bu sualları "görmüş" sayılır
   send(ws, { t: 'xstart', id: S.id, inst: S.inst, seat, qs: S.qs.map(({ q, o }) => ({ q, o })), time: Math.round((S.endsAt - Date.now()) / 1000),
     npcs: S.npcs.map((n) => ({ name: n.name, seat: n.seat, look: n.look })), late: true });
   sendS(S, { t: 'xsay', text: `${nameOf(ws.key)}, gecikmisən! Tez otur, vaxt gedir.` });
@@ -1076,10 +1090,7 @@ function examStart(S) {
   S.L = L;
   S.state = 'exam';
   S.endsAt = Date.now() + EXAM_CFG.time * 1000;
-  S.qs = shuffle([...QUESTIONS]).slice(0, EXAM_CFG.questions).map(([q, o, c]) => {
-    const idx = shuffle([0, 1, 2]);
-    return { q, o: idx.map((i) => o[i]), c: idx.indexOf(c) };
-  });
+  S.qs = pickQuestions([...S.members.keys()]);
   // yerlər: oyunçular 2–5-ci sıralarda, NPC-lər qalan yerlərdə
   const all = L.seats.map((s, i) => i);
   const mid = shuffle(all.filter((i) => i >= 6 && i < 30));
@@ -1131,7 +1142,7 @@ function examEnd(S) {
   const best = res.find((r) => !r.out)?.score || 0;
   for (const r of res) {
     if (r.out) continue;
-    let xp = r.score * 8 + (r.score === S.qs.length ? 10 : 0) + (best > 0 && r.score === best ? 15 : 0);
+    let xp = r.score * 5 + (r.score === S.qs.length ? 10 : 0) + (best > 0 && r.score === best ? 15 : 0);
     if (xp) addXp(r.key, xp);
     r.xp = xp;
     const acc = db.accounts[r.key];

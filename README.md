@@ -131,6 +131,10 @@ Login is protected against PIN guessing: 5 wrong PINs from one IP lock it for 10
   Latecomers can still join a running exam (**Gec qoşul ⏱**) while there is a free place and more than 30 seconds
   left; they get a free desk and the remaining time. A student who was thrown out cannot rejoin the same exam.
   Up to 3 exams can run at the same time; results and XP are announced when everyone has finished.
+  Each exam has **10 questions** (5 minutes) drawn at random from a bank of 168 C# questions in Azerbaijani
+  (`server/data/csharp-questions.json`: types, operators, conditions, loops, arrays/List, strings, methods, OOP,
+  interfaces, exceptions, LINQ, async). No question repeats within an exam, topics are mixed, answer options are
+  shuffled, and each player's last 60 questions are kept so the next exams avoid them.
 - **Fast travel:** press **T** (or 🧭 in the mobile menu) to teleport to the rectorate (exam lobby), the central
   plaza, the pitches, the gallows or the other buildings. Not available in combat (6 s without damage), during
   a match or an exam, and only every 10 seconds.
@@ -212,7 +216,7 @@ Touch controls appear automatically on phones and tablets (landscape is recommen
 ## Tests
 
 ```bash
-npm test          # map validation + ball physics + server protocol tests
+npm test          # map validation + ball physics + question bank + server protocol tests
 npm run test:map  # only the campus.json checks
 ```
 
@@ -220,8 +224,10 @@ npm run test:map  # only the campus.json checks
   objects placed on roads or inside buildings, and overlapping areas.
 - `tests/ball.test.js` checks the shared ball physics (`public/js/ballphys.js`): goals, goal nets and posts,
   players' bodies, the basketball rim, backboard and shot accuracy, and ball-to-ball collisions.
+- `tests/questions.test.js` checks the C# question bank: at least 120 questions, unique ids and texts, three distinct
+  options, a valid answer index, every topic present and answers spread over the three positions.
 - `tests/protocol.test.js` starts its own server on port 3101 with a temporary data folder
-  (your `data/players.json` is never touched) and runs 123 multiplayer checks: login, register, logout and
+  (your `data/players.json` is never touched) and runs 126 multiplayer checks: login, register, logout and
   character validation, sync, chat, teleport guard, shooting, ammo, death and respawn,
   punching, the gallows, brute-force protection and session takeover.
 
